@@ -1,3 +1,4 @@
+import java.nio.file.ProviderNotFoundException
 import java.util.*
 import kotlin.collections.ArrayList
 
@@ -17,112 +18,133 @@ fun main(args: Array<String>) {
 
     // game loop
     while (true) {
-        val turnsRemaining = input.nextInt()
-        val player = input.nextChef()
-        val partner = input.nextChef()
-        val tables = input.readTables()
-        val ovenContents = input.next() // ignore until wood 1 league
-        val ovenTimer = input.nextInt()
-        val customers = input.nextCustomers()
+        val action =
+            try {
+                val turnsRemaining = input.nextInt()
+                val player = input.nextChef()
+                val partner = input.nextChef()
+                val tables = input.readTables()
+                val ovenContents = input.next() // ignore until wood 1 league
+                val ovenTimer = input.nextInt()
+                val customers = input.nextCustomers()
 
-        val useWindow = Action.Use(kitchen.getPositionOf(Equipment.WINDOW))
+                val useWindow = Action.Use(kitchen.getPositionOf(Equipment.WINDOW))
 
-        fun get(item: Item): Action {
-            val equipment = Equipment.getEquipmentThatProvides(item)
-            val equipmentPosition = kitchen.getPositionOf(equipment)
-            return Action.Use(equipmentPosition, equipment.name)
-        }
-
-        fun dropPlayerItem(): Action {
-            return Action.Use(kitchen.getPositionOf(Equipment.DISHWASHER), "Drop player item")
-        }
-
-        fun prepare(item: Item): List<Action> {
-            debug("player.item.name : ${player.item.name}")
-            debug("item to prepare  : ${item}")
-
-            if (item.isNone || player.item == item) {
-                return emptyList()
-            }
-
-            val actions = mutableListOf<Action>()
-
-            if (player.needsToDropItemToPrepare(item)) {
-                actions += dropPlayerItem()
-            }
-
-            if (item.isBase) {
-                actions += get(item)
-            } else if (player.item != item) {
-                actions += prepare(item.withoutLastBaseItem)
-                actions += get(item.baseItems.last())
-            }
-
-            return actions.toList()
-        }
-
-        fun actionsToServe(customer: Customer): List<Action> {
-
-            val actions = mutableListOf<Action>()
-
-            if (player.item != customer.item) {
-
-                // Le plat existe déjà sur une table ?
-                val tableWithItem = tables.find { table -> table.item == customer.item }
-                if (tableWithItem != null) {
-                    actions += Action.Use(tableWithItem.position, tableWithItem.toString())
-                } else {
-                    actions += prepare(customer.item)
+                fun get(item: Item): Action {
+                    val equipment = Equipment.getEquipmentThatProvides(item)
+                    val equipmentPosition = kitchen.getPositionOf(equipment)
+                    return Action.Use(equipmentPosition, equipment.name)
                 }
 
-            }
+                fun dropPlayerItem(): Action {
+                    return Action.Use(kitchen.getPositionOf(Equipment.DISHWASHER), "Drop player item")
+                }
 
-            actions += useWindow
+                fun prepare(item: Item): List<Action> {
+                    debug("player.item.name : ${player.item.name}")
+                    debug("item to prepare  : ${item}")
 
-            return actions.toList()
-        }
+                    if (item.isNone || player.item == item) { // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
+                        return emptyList()
+                    }
 
-        val actionsByCustomer = mutableMapOf<Customer, List<Action>>()
-        for (customer in customers) {
-            val actions = actionsToServe(customer)
-            debug("actions for customer $customer : " + actions.joinToString("\n"))
-            actionsByCustomer[customer] = actions;
-        }
+                    val actions = mutableListOf<Action>()
 
-        fun costOf(action: Action): Int {
-            if (action is Action.Use) {
-                if (player.isNextTo(action.position)) {
+                    if (player.needsToDropItemToPrepare(item)) {
+                        actions += dropPlayerItem()
+                    }
+
+                    if (item.isBase) {
+                        actions += get(item)
+                    } else if (player.item != item) { // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
+                        actions += prepare(item.withoutLastBaseItem)
+                        actions += get(item.baseItems.last())
+                    }
+
+                    return actions.toList()
+                }
+
+                fun actionsToServe(customer: Customer): List<Action> {
+
+                    val actions = mutableListOf<Action>()
+
+                    if (player.item != customer.item) {
+
+                        // Le plat existe déjà sur une table ?
+                        val tableWithItem = tables.find { table -> table.item == customer.item }
+                        if (tableWithItem != null) {
+                            actions += Action.Use(tableWithItem.position, tableWithItem.toString())
+                        } else {
+                            actions += prepare(customer.item)
+                        }
+
+                    }
+
+                    actions += useWindow
+
+                    return actions.toList()
+                }
+
+                val actionsByCustomer = mutableMapOf<Customer, List<Action>>()
+                var firstException: Exception? = null
+                for (customer in customers) {
+                    try {
+                        val actions = actionsToServe(customer)
+                        debug("actions for customer $customer : " + actions.joinToString("\n"))
+                        actionsByCustomer[customer] = actions;
+                    } catch (e: Exception) {
+                        debug("Cannot serve $customer because of error : ${e.message}")
+                        firstException = e
+                    }
+                }
+
+                if (actionsByCustomer.isEmpty() && firstException != null) {
+                    throw firstException
+                }
+
+                fun costOf(action: Action): Int {
+                    if (action is Action.Use) {
+                        if (player.isNextTo(action.position)) {
+                            return 1
+                        } else {
+                            return 2 // TODO compute cost to go from player position to action.position
+                        }
+                    }
                     return 1
+                }
+
+                fun costOf(actions: List<Action>): Int {
+                    return actions.sumOf { action -> costOf(action) }
+                }
+
+                fun chooseCustomerWithMaxAward(actionsByCustomer: MutableMap<Customer, List<Action>>): Customer {
+                    return actionsByCustomer
+                        .map { (customer, actions) ->
+                            val actionsAward = customer.award - costOf(actions)
+                            CustomerActionsWithAward(customer, actions, actionsAward)
+                        }
+                        .maxByOrNull(CustomerActionsWithAward::award)!!
+                        .customer
+                }
+
+
+                if (actionsByCustomer.isEmpty()) {
+                    Action.Wait("Cannot serve any customer")
                 } else {
-                    return 2 // TODO compute cost to go from player position to action.position
+                    val bestValuableCustomer = chooseCustomerWithMaxAward(actionsByCustomer)
+                    val actions = actionsByCustomer[bestValuableCustomer]!!
+
+                    debug("actions : " + actions.joinToString("\n"))
+
+                    actions.firstOrNull() ?: Action.Wait("No action to perform");
                 }
+
+            } catch (e: ItemProviderNotFoundException) {
+                Action.Wait(comment = e.item.name + "?!")
+            } catch (e: Exception) {
+                debug("ERROR : ${e.message}")
+                Action.Wait(comment = e.message)
             }
-            return 1
-        }
-
-        fun costOf(actions: List<Action>): Int {
-            return actions.sumOf { action -> costOf(action) }
-        }
-
-        fun chooseCustomerWithMaxAward(actionsByCustomer: MutableMap<Customer, List<Action>>, player: Chef): Customer {
-            return actionsByCustomer
-                .map { (customer, actions) ->
-                    val actionsAward = customer.award - costOf(actions)
-                    CustomerActionsWithAward(customer, actions, actionsAward)
-                }
-                .maxByOrNull(CustomerActionsWithAward::award)!!
-                .customer
-        }
-
-        val bestValuableCustomer = chooseCustomerWithMaxAward(actionsByCustomer, player)
-        val actions = actionsByCustomer[bestValuableCustomer]!!
-
-        debug("actions : " + actions.joinToString("\n"))
-
-        // Write an action using println()
-        // To debug: System.err.println("Debug messages...");
-
-        val action = actions.firstOrNull() ?: Action.Wait();
 
         // MOVE x y
         // USE x y
@@ -245,9 +267,9 @@ data class Position(val x: Int, val y: Int) {
 private const val NONE = "NONE"
 
 @JvmInline
-value class Item(val name: String) {
+value class Item(val name: String) { // FIXME il faudrait séparer BaseItem et ComposedItem
     fun contains(item: Item): Boolean {
-        return name.startsWith(item.name)
+        return name.startsWith(item.name) // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
     }
 
     val baseItems: Items
@@ -310,8 +332,7 @@ interface Positioned {
 }
 
 abstract class Action(val name: String, val comment: String? = null) {
-
-    open class Use(val position: Position, comment: String? = null) : Action("USE", comment) {
+    class Move(val position: Position, comment: String? = null) : Action("MOVE", comment) {
         override fun toString(): String {
             return if (comment != null) {
                 "$name $position; $comment"
@@ -321,7 +342,24 @@ abstract class Action(val name: String, val comment: String? = null) {
         }
     }
 
-    class Wait : Action("WAIT") {
+    class Use(val position: Position, comment: String? = null) : Action("USE", comment) {
+        override fun toString(): String {
+            return if (comment != null) {
+                "$name $position; $comment"
+            } else {
+                "$name $position"
+            }
+        }
+    }
+
+    class Wait(comment: String? = null) : Action("WAIT", comment)
+
+    override fun toString(): String {
+        return if (comment != null) {
+            "$name; $comment"
+        } else {
+            name
+        }
     }
 
 }
@@ -344,5 +382,5 @@ enum class Equipment(val char: Char, val providedItem: Item? = null) {
     }
 }
 
-class ItemProviderNotFoundException(item: Item) : Exception("Cannot find provider for ${item}") {
+class ItemProviderNotFoundException(val item: Item) : Exception("Cannot find provider for ${item}") {
 }
