@@ -1,4 +1,5 @@
 import java.util.*
+import kotlin.collections.ArrayList
 
 /**
  * Auto-generated code below aims at helping you parse
@@ -24,54 +25,67 @@ fun main(args: Array<String>) {
         val ovenTimer = input.nextInt()
         val customers = input.nextCustomers()
 
-        val useWindow = Action.Use(kitchen.getEquipmentPosition(Equipment.WINDOW))
+        val useWindow = Action.Use(kitchen.getPositionOf(Equipment.WINDOW))
 
-        fun actionsToServeItemFromTable(tableWithItem: Table): List<Action> {
-            return listOf(
-                Action.Use(tableWithItem.position), // On va le chercher
-                useWindow
-            );
+        fun get(item: Item): Action {
+            val equipment = Equipment.getEquipmentThatProvides(item)
+            val equipmentPosition = kitchen.getPositionOf(equipment)
+            return Action.Use(equipmentPosition, equipment.name)
         }
 
-        fun actionsToPrepare(item: Item): List<Action> {
-            debug("player.item.name" + player.item.name)
-            if (player.item.name == "DISH-BLUEBERRIES") {
-                return listOf(
-                    Action.Use(kitchen.getEquipmentPosition(Equipment.ICE_CREAM_CRATE)),
-                )
-            } else if (player.item.name == "DISH") {
-                return listOf(
-                    Action.Use(kitchen.getEquipmentPosition(Equipment.BLUBERRIES_CRATE)),
-                    Action.Use(kitchen.getEquipmentPosition(Equipment.ICE_CREAM_CRATE)),
-                )
-            } else {
-                return listOf(
-                    Action.Use(kitchen.getEquipmentPosition(Equipment.DISHWASHER)),
-                    Action.Use(kitchen.getEquipmentPosition(Equipment.BLUBERRIES_CRATE)),
-                    Action.Use(kitchen.getEquipmentPosition(Equipment.ICE_CREAM_CRATE)),
-                )
+        fun dropPlayerItem(): Action {
+            return Action.Use(kitchen.getPositionOf(Equipment.DISHWASHER), "Drop player item")
+        }
+
+        fun prepare(item: Item): List<Action> {
+            debug("player.item.name : ${player.item.name}")
+            debug("item to prepare  : ${item}")
+
+            if (item.isNone || player.item == item) {
+                return emptyList()
             }
+
+            val actions = mutableListOf<Action>()
+
+            if (player.needsToDropItemToPrepare(item)) {
+                actions += dropPlayerItem()
+            }
+
+            if (item.isBase) {
+                actions += get(item)
+            } else if (player.item != item) {
+                actions += prepare(item.withoutLastBaseItem)
+                actions += get(item.baseItems.last())
+            }
+
+            return actions.toList()
         }
 
         fun actionsToServe(customer: Customer): List<Action> {
 
-            if (player.item == customer.item) {
-                return listOf(useWindow)
+            val actions = mutableListOf<Action>()
+
+            if (player.item != customer.item) {
+
+                // Le plat existe déjà sur une table ?
+                val tableWithItem = tables.find { table -> table.item == customer.item }
+                if (tableWithItem != null) {
+                    actions += Action.Use(tableWithItem.position, tableWithItem.toString())
+                } else {
+                    actions += prepare(customer.item)
+                }
+
             }
 
-            // Le plat existe déjà sur une table ?
-            val tableWithItem = tables.find { table -> table.item == customer.item }
-            if (tableWithItem != null) {
-                return actionsToServeItemFromTable(tableWithItem)
-            }
+            actions += useWindow
 
-            // Si le plat n'existe pas, il faut le préparer puis le servir
-            return actionsToPrepare(customer.item) + useWindow
+            return actions.toList()
         }
 
         val actionsByCustomer = mutableMapOf<Customer, List<Action>>()
         for (customer in customers) {
             val actions = actionsToServe(customer)
+            debug("actions for customer $customer : " + actions.joinToString("\n"))
             actionsByCustomer[customer] = actions;
         }
 
@@ -190,7 +204,7 @@ class Kitchen {
         equipmentPositions[equipment] = position
     }
 
-    fun getEquipmentPosition(equipment: Equipment): Position {
+    fun getPositionOf(equipment: Equipment): Position {
         if (!equipmentPositions.containsKey(equipment)) {
             throw EquipmentNotFoundException(equipment)
         }
@@ -208,16 +222,48 @@ data class Position(val x: Int, val y: Int) {
     }
 }
 
+private const val NONE = "NONE"
+
 @JvmInline
 value class Item(val name: String) {
+    fun contains(item: Item): Boolean {
+        return name.startsWith(item.name)
+    }
+
+    val baseItems: Items
+        get() = Items(
+            name.split("-")
+                .map { namePart -> if (namePart == name) this else Item(namePart) }
+                .toList()
+        )
+    val isNone get() = name == NONE
+    val withoutLastBaseItem: Item
+        get() {
+            val newName = name.substringBeforeLast("-")
+            return if (newName.isEmpty()) {
+                Item(NONE)
+            } else {
+                Item(newName)
+            }
+        }
+    val isBase get() = !name.contains("-")
+
 }
 
+class Items(private val value: List<Item>) : List<Item> by value {
+}
+
+
 class Chef(var position: Position) {
-    var item: Item = Item("NONE")
+    var item: Item = Item(NONE)
+
+    fun needsToDropItemToPrepare(itemToPrepare: Item): Boolean {
+        return !item.isNone && !itemToPrepare.contains(this.item)
+    }
 }
 
 class Table(override var position: Position) : Positioned {
-    var item: Item = Item("NONE")
+    var item: Item = Item(NONE)
 }
 
 class Tables() : ArrayList<Table>() {
@@ -239,11 +285,9 @@ interface Positioned {
     var position: Position
 }
 
-abstract class Action(val name: String, var comment: String? = null) {
+abstract class Action(val name: String, val comment: String? = null) {
 
-    class Use(private val position: Position) : Action("USE") {
-        constructor(positioned: Positioned) : this(positioned.position)
-
+    open class Use(private val position: Position, comment: String? = null) : Action("USE", comment) {
         override fun toString(): String {
             return if (comment != null) {
                 "$name $position; $comment"
@@ -258,15 +302,23 @@ abstract class Action(val name: String, var comment: String? = null) {
 
 }
 
-enum class Equipment(val char: Char) {
-    DISHWASHER('D'),
+enum class Equipment(val char: Char, val providedItem: Item? = null) {
+    DISHWASHER('D', Item("DISH")),
     WINDOW('W'),
-    BLUBERRIES_CRATE('B'),
-    ICE_CREAM_CRATE('I'), ;
+    BLUBERRIES_CRATE('B', Item("BLUEBERRIES")),
+    ICE_CREAM_CRATE('I', Item("ICE_CREAM")), ;
 
     companion object {
         fun get(char: Char): Equipment? {
             return Equipment.values().find { equipment -> equipment.char == char }
         }
+
+        fun getEquipmentThatProvides(item: Item): Equipment {
+            return values().find { equipment -> equipment.providedItem == item }
+                ?: throw ItemProviderNotFoundException(item)
+        }
     }
+}
+
+class ItemProviderNotFoundException(item: Item) : Exception("Cannot find provider for ${item}") {
 }
