@@ -24,11 +24,11 @@ fun main(args: Array<String>) {
         val ovenTimer = input.nextInt()
         val customers = input.nextCustomers()
 
-        val useWindow = Action.Use(kitchen.getEquipmentWithPosition(Equipment.WINDOW))
+        val useWindow = Action.Use(kitchen.getEquipmentPosition(Equipment.WINDOW))
 
         fun actionsToServeItemFromTable(tableWithItem: Table): List<Action> {
             return listOf(
-                Action.Use(tableWithItem), // On va le chercher
+                Action.Use(tableWithItem.position), // On va le chercher
                 useWindow
             );
         }
@@ -37,20 +37,20 @@ fun main(args: Array<String>) {
             debug("player.item.name" + player.item.name)
             if (player.item.name == "DISH-BLUEBERRIES") {
                 return listOf(
-                    Action.Use(kitchen.getEquipmentWithPosition(Equipment.ICE_CREAM_CRATE)),
+                    Action.Use(kitchen.getEquipmentPosition(Equipment.ICE_CREAM_CRATE)),
                 )
             }
             else if (player.item.name == "DISH") {
                 return listOf(
-                    Action.Use(kitchen.getEquipmentWithPosition(Equipment.BLUBERRIES_CRATE)),
-                    Action.Use(kitchen.getEquipmentWithPosition(Equipment.ICE_CREAM_CRATE)),
+                    Action.Use(kitchen.getEquipmentPosition(Equipment.BLUBERRIES_CRATE)),
+                    Action.Use(kitchen.getEquipmentPosition(Equipment.ICE_CREAM_CRATE)),
                 )
             }
             else {
                 return listOf(
-                    Action.Use(kitchen.getEquipmentWithPosition(Equipment.DISHWASHER)),
-                    Action.Use(kitchen.getEquipmentWithPosition(Equipment.BLUBERRIES_CRATE)),
-                    Action.Use(kitchen.getEquipmentWithPosition(Equipment.ICE_CREAM_CRATE)),
+                    Action.Use(kitchen.getEquipmentPosition(Equipment.DISHWASHER)),
+                    Action.Use(kitchen.getEquipmentPosition(Equipment.BLUBERRIES_CRATE)),
+                    Action.Use(kitchen.getEquipmentPosition(Equipment.ICE_CREAM_CRATE)),
                 )
             }
         }
@@ -98,7 +98,7 @@ fun chooseBestValuableCustomer(actionsByCustomer: MutableMap<Customer, List<Acti
     var bestValuableCustomer: Customer = actionsByCustomer.keys.first();
     for ((customer, actions) in actionsByCustomer) {
         val bestValuableCustomerActions = actionsByCustomer[bestValuableCustomer]!!
-        if (actions.size < bestValuableCustomerActions.size) {
+        if (actions.size < bestValuableCustomerActions.size) { // TODO faire un calcul plus précis du coût des actions
             bestValuableCustomer = customer
         }
     }
@@ -110,7 +110,7 @@ fun debug(message: String) {
 }
 
 @JvmInline
-value class Input(val input: Scanner) {
+value class Input(private val input: Scanner) {
 
     fun next(): String {
         return input.next()
@@ -138,13 +138,13 @@ value class Input(val input: Scanner) {
         return chef
     }
 
-    fun nextTable(): Table {
+    private fun nextTable(): Table {
         val table = Table(nextPosition())
         table.item = nextItem()
         return table
     }
 
-    fun nextCustomer(): Customer {
+    private fun nextCustomer(): Customer {
         return Customer(nextItem(), input.nextInt())
     }
 
@@ -156,7 +156,7 @@ value class Input(val input: Scanner) {
             System.err.println("table : $table")
             tables.add(table)
         }
-        return tables;
+        return tables
     }
 
     fun nextCustomers(): Customers {
@@ -187,7 +187,6 @@ value class Input(val input: Scanner) {
 
 class Kitchen {
     private val equipmentPositions = mutableMapOf<Equipment, Position>()
-    private val equipmentsWithPositions = mutableMapOf<Equipment, Positioned>()
 
     fun putEquipment(equipment: Equipment, position: Position) {
         equipmentPositions[equipment] = position
@@ -195,17 +194,11 @@ class Kitchen {
 
     fun getEquipmentPosition(equipment: Equipment): Position {
         if (!equipmentPositions.containsKey(equipment)) {
-            throw EquipmentNotFoundException(equipment);
+            throw EquipmentNotFoundException(equipment)
         }
         return equipmentPositions[equipment]!!
     }
 
-    fun getEquipmentWithPosition(equipment: Equipment): Positioned {
-        return equipmentsWithPositions.computeIfAbsent(equipment) {
-            val position = getEquipmentPosition(equipment)
-            EquipmentWithPosition(equipment, position)
-        }
-    }
 }
 
 class EquipmentNotFoundException(equipment: Equipment) : Exception("${equipment.name} not found in the kitchen") {
@@ -222,7 +215,7 @@ value class Item(val name: String) {
 }
 
 class Chef(var position: Position) {
-    var item: Item = Item("NONE");
+    var item: Item = Item("NONE")
 }
 
 class Table(override var position: Position) : Positioned {
@@ -233,7 +226,7 @@ class Tables() : ArrayList<Table>() {
 
 }
 
-class Customer(val item: Item, award: Int) {
+class Customer(val item: Item, val award: Int) {
 
 }
 
@@ -244,25 +237,18 @@ class Customers() : ArrayList<Customer>() {
 
 }
 
-class NeedResolver {
-    fun resolve(neededItems: List<Item>) {
-        TODO("Not yet implemented")
-    }
-
-}
-
 interface Positioned {
     var position: Position
 }
 
 abstract class Action(val name: String, var comment: String? = null) {
 
-    class Use(val positioned: Positioned) : Action("USE") {
+    class Use(private val position: Position) : Action("USE") {
         override fun toString(): String {
             return if (comment != null) {
-                "$name ${positioned.position}; $comment"
+                "$name $position; $comment"
             } else {
-                "$name ${positioned.position}"
+                "$name $position"
             }
         }
     }
@@ -283,8 +269,4 @@ enum class Equipment(val char: Char) {
             return Equipment.values().find { equipment -> equipment.char == char }
         }
     }
-}
-
-class EquipmentWithPosition(val equipment: Equipment, override var position: Position) : Positioned {
-
 }
