@@ -89,7 +89,32 @@ fun main(args: Array<String>) {
             actionsByCustomer[customer] = actions;
         }
 
-        val bestValuableCustomer = chooseBestValuableCustomer(actionsByCustomer)
+        fun costOf(action: Action): Int {
+            if (action is Action.Use) {
+                if (player.isNextTo(action.position)) {
+                    return 1
+                } else {
+                    return 2 // TODO compute cost to go from player position to action.position
+                }
+            }
+            return 1
+        }
+
+        fun costOf(actions: List<Action>): Int {
+            return actions.sumOf { action -> costOf(action) }
+        }
+
+        fun chooseCustomerWithMaxAward(actionsByCustomer: MutableMap<Customer, List<Action>>, player: Chef): Customer {
+            return actionsByCustomer
+                .map { (customer, actions) ->
+                    val actionsAward = customer.award - costOf(actions)
+                    CustomerActionsWithAward(customer, actions, actionsAward)
+                }
+                .maxByOrNull(CustomerActionsWithAward::award)!!
+                .customer
+        }
+
+        val bestValuableCustomer = chooseCustomerWithMaxAward(actionsByCustomer, player)
         val actions = actionsByCustomer[bestValuableCustomer]!!
 
         debug("actions : " + actions.joinToString("\n"))
@@ -106,16 +131,7 @@ fun main(args: Array<String>) {
     }
 }
 
-fun chooseBestValuableCustomer(actionsByCustomer: MutableMap<Customer, List<Action>>): Customer {
-    var bestValuableCustomer: Customer = actionsByCustomer.keys.first();
-    for ((customer, actions) in actionsByCustomer) {
-        val bestValuableCustomerActions = actionsByCustomer[bestValuableCustomer]!!
-        if (actions.size < bestValuableCustomerActions.size) { // TODO faire un calcul plus précis du coût des actions
-            bestValuableCustomer = customer
-        }
-    }
-    return bestValuableCustomer
-}
+class CustomerActionsWithAward(val customer: Customer, val actions: List<Action>, val award: Int)
 
 fun debug(message: String) {
     System.err.println(message)
@@ -220,6 +236,10 @@ data class Position(val x: Int, val y: Int) {
     override fun toString(): String {
         return "$x $y"
     }
+
+    fun isNextTo(position: Position): Boolean {
+        return kotlin.math.abs(this.x - position.x) <= 1 && kotlin.math.abs(this.y - position.y) <= 1
+    }
 }
 
 private const val NONE = "NONE"
@@ -253,13 +273,13 @@ value class Item(val name: String) {
 class Items(private val value: List<Item>) : List<Item> by value {
 }
 
-
-class Chef(var position: Position) {
+class Chef(override var position: Position) : Positioned {
     var item: Item = Item(NONE)
 
     fun needsToDropItemToPrepare(itemToPrepare: Item): Boolean {
         return !item.isNone && !itemToPrepare.contains(this.item)
     }
+
 }
 
 class Table(override var position: Position) : Positioned {
@@ -283,11 +303,15 @@ class Customers() : ArrayList<Customer>() {
 
 interface Positioned {
     var position: Position
+
+    fun isNextTo(position: Position): Boolean {
+        return this.position.isNextTo(position)
+    }
 }
 
 abstract class Action(val name: String, val comment: String? = null) {
 
-    open class Use(private val position: Position, comment: String? = null) : Action("USE", comment) {
+    open class Use(val position: Position, comment: String? = null) : Action("USE", comment) {
         override fun toString(): String {
             return if (comment != null) {
                 "$name $position; $comment"
