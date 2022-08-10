@@ -39,14 +39,12 @@ fun main(args: Array<String>) {
                 return listOf(
                     Action.Use(kitchen.getEquipmentPosition(Equipment.ICE_CREAM_CRATE)),
                 )
-            }
-            else if (player.item.name == "DISH") {
+            } else if (player.item.name == "DISH") {
                 return listOf(
                     Action.Use(kitchen.getEquipmentPosition(Equipment.BLUBERRIES_CRATE)),
                     Action.Use(kitchen.getEquipmentPosition(Equipment.ICE_CREAM_CRATE)),
                 )
-            }
-            else {
+            } else {
                 return listOf(
                     Action.Use(kitchen.getEquipmentPosition(Equipment.DISHWASHER)),
                     Action.Use(kitchen.getEquipmentPosition(Equipment.BLUBERRIES_CRATE)),
@@ -244,6 +242,8 @@ interface Positioned {
 abstract class Action(val name: String, var comment: String? = null) {
 
     class Use(private val position: Position) : Action("USE") {
+        constructor(positioned: Positioned) : this(positioned.position)
+
         override fun toString(): String {
             return if (comment != null) {
                 "$name $position; $comment"
