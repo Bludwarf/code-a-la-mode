@@ -1,32 +1,27 @@
-import java.nio.file.ProviderNotFoundException
 import java.util.*
 import kotlin.collections.ArrayList
 
+// https://www.codingame.com/ide/puzzle/code-a-la-mode
 /**
  * Auto-generated code below aims at helping you parse
  * the standard input according to the problem statement.
  **/
 fun main(args: Array<String>) {
     val input = Input(Scanner(System.`in`))
-    val numAllCustomers = input.nextInt()
-    for (i in 0 until numAllCustomers) {
-        val customerItem = input.next() // the food the customer is waiting for
-        val customerAward = input.nextInt() // the number of points awarded for delivering the food
-    }
-    input.nextLine()
-    val kitchen = input.nextKitchen()
+    val game = input.nextGame()
 
     // game loop
     while (true) {
         val action =
             try {
-                val turnsRemaining = input.nextInt()
-                val player = input.nextChef()
-                val partner = input.nextChef()
-                val tables = input.readTables()
-                val ovenContents = input.next() // ignore until wood 1 league
-                val ovenTimer = input.nextInt()
-                val customers = input.nextCustomers()
+                val kitchen = game.kitchen
+
+                val gameState = input.nextGameState()
+
+                // TODO encapsulation
+                val player = gameState.player
+                val tables = gameState.tables
+                val customers = gameState.customers
 
                 val useWindow = Action.Use(kitchen.getPositionOf(Equipment.WINDOW))
 
@@ -153,6 +148,14 @@ fun main(args: Array<String>) {
     }
 }
 
+class Game(val kitchen: Kitchen) {
+
+}
+
+class GameState(val player: Chef, val tables: Tables, val customers: Customers) {
+
+}
+
 class CustomerActionsWithAward(val customer: Customer, val actions: List<Action>, val award: Int)
 
 fun debug(message: String) {
@@ -232,6 +235,28 @@ value class Input(private val input: Scanner) {
             }
         }
         return kitchen
+    }
+
+    fun nextGame(): Game {
+        val numAllCustomers = input.nextInt()
+        for (i in 0 until numAllCustomers) {
+            val customerItem = input.next() // the food the customer is waiting for
+            val customerAward = input.nextInt() // the number of points awarded for delivering the food
+        }
+        input.nextLine()
+        val kitchen = nextKitchen()
+        return Game(kitchen);
+    }
+
+    fun nextGameState(): GameState {
+        val turnsRemaining = input.nextInt()
+        val player = nextChef()
+        val partner = nextChef()
+        val tables = readTables()
+        val ovenContents = input.next() // ignore until wood 1 league
+        val ovenTimer = input.nextInt()
+        val customers = nextCustomers()
+        return GameState(player, tables, customers)
     }
 }
 
