@@ -20,7 +20,7 @@ fun main(args: Array<String>) {
 
                 // TODO encapsulation
                 val player = gameState.player
-                val tables = gameState.tables
+                val tables = gameState.tablesWithItem
                 val customers = gameState.customers
 
                 val useWindow = Action.Use(kitchen.getPositionOf(Equipment.WINDOW))
@@ -37,7 +37,7 @@ fun main(args: Array<String>) {
 
                 fun prepare(item: Item): List<Action> {
                     debug("player.item.name : ${player.item.name}")
-                    debug("item to prepare  : ${item}")
+                    debug("item to prepare  : $item")
 
                     if (item.isNone || player.item == item) { // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
                         return emptyList()
@@ -99,10 +99,10 @@ fun main(args: Array<String>) {
 
                 fun costOf(action: Action): Int {
                     if (action is Action.Use) {
-                        if (player.isNextTo(action.position)) {
-                            return 1
+                        return if (player.isNextTo(action.position)) {
+                            1
                         } else {
-                            return 2 // TODO compute cost to go from player position to action.position
+                            2 // TODO compute cost to go from player position to action.position
                         }
                     }
                     return 1
@@ -131,7 +131,7 @@ fun main(args: Array<String>) {
 
                     debug("actions : " + actions.joinToString("\n"))
 
-                    actions.firstOrNull() ?: Action.Wait("No action to perform");
+                    actions.firstOrNull() ?: Action.Wait("No action to perform")
                 }
 
             } catch (e: ItemProviderNotFoundException) {
@@ -152,7 +152,7 @@ class Game(val kitchen: Kitchen) {
 
 }
 
-class GameState(val player: Chef, val tables: Tables, val customers: Customers) {
+class GameState(val player: Chef, val tablesWithItem: Tables, val customers: Customers) {
 
 }
 
@@ -165,18 +165,6 @@ fun debug(message: String) {
 @JvmInline
 value class Input(private val input: Scanner) {
 
-    fun next(): String {
-        return input.next()
-    }
-
-    fun nextInt(): Int {
-        return input.nextInt()
-    }
-
-    fun nextLine(): String {
-        return input.nextLine()
-    }
-
     private fun nextPosition(): Position {
         return Position(input.nextInt(), input.nextInt())
     }
@@ -185,7 +173,7 @@ value class Input(private val input: Scanner) {
         return Item(input.next())
     }
 
-    fun nextChef(): Chef {
+    private fun nextChef(): Chef {
         val chef = Chef(nextPosition())
         chef.item = nextItem()
         return chef
@@ -201,7 +189,7 @@ value class Input(private val input: Scanner) {
         return Customer(nextItem(), input.nextInt())
     }
 
-    fun readTables(): Tables {
+    private fun readTablesWithItem(): Tables {
         val tables = Tables()
         val numTablesWithItems = input.nextInt() // the number of tables in the kitchen that currently hold an item
         for (i in 0 until numTablesWithItems) {
@@ -212,7 +200,7 @@ value class Input(private val input: Scanner) {
         return tables
     }
 
-    fun nextCustomers(): Customers {
+    private fun nextCustomers(): Customers {
         val customers = Customers()
         val numCustomers = input.nextInt() // the number of customers currently waiting for food
         for (i in 0 until numCustomers) {
@@ -223,7 +211,7 @@ value class Input(private val input: Scanner) {
         return customers
     }
 
-    fun nextKitchen(): Kitchen {
+    private fun nextKitchen(): Kitchen {
         val kitchen = Kitchen()
         for (y in 0 until 7) {
             val kitchenLine = input.nextLine()
@@ -240,8 +228,9 @@ value class Input(private val input: Scanner) {
     fun nextGame(): Game {
         val numAllCustomers = input.nextInt()
         for (i in 0 until numAllCustomers) {
-            val customerItem = input.next() // the food the customer is waiting for
-            val customerAward = input.nextInt() // the number of points awarded for delivering the food
+            @Suppress("UNUSED_VARIABLE") val customerItem = input.next() // the food the customer is waiting for
+            @Suppress("UNUSED_VARIABLE") val customerAward =
+                input.nextInt() // the number of points awarded for delivering the food
         }
         input.nextLine()
         val kitchen = nextKitchen()
@@ -249,14 +238,14 @@ value class Input(private val input: Scanner) {
     }
 
     fun nextGameState(): GameState {
-        val turnsRemaining = input.nextInt()
+        @Suppress("UNUSED_VARIABLE") val turnsRemaining = input.nextInt()
         val player = nextChef()
-        val partner = nextChef()
-        val tables = readTables()
-        val ovenContents = input.next() // ignore until wood 1 league
-        val ovenTimer = input.nextInt()
+        @Suppress("UNUSED_VARIABLE") val partner = nextChef()
+        val tablesWithItem = readTablesWithItem()
+        @Suppress("UNUSED_VARIABLE") val ovenContents = input.next() // ignore until wood 1 league
+        @Suppress("UNUSED_VARIABLE") val ovenTimer = input.nextInt()
         val customers = nextCustomers()
-        return GameState(player, tables, customers)
+        return GameState(player, tablesWithItem, customers)
     }
 }
 
@@ -276,8 +265,7 @@ class Kitchen {
 
 }
 
-class EquipmentNotFoundException(equipment: Equipment) : Exception("${equipment.name} not found in the kitchen") {
-}
+class EquipmentNotFoundException(equipment: Equipment) : Exception("${equipment.name} not found in the kitchen")
 
 data class Position(val x: Int, val y: Int) {
     override fun toString(): String {
@@ -317,8 +305,7 @@ value class Item(val name: String) { // FIXME il faudrait séparer BaseItem et C
 
 }
 
-class Items(private val value: List<Item>) : List<Item> by value {
-}
+class Items(private val value: List<Item>) : List<Item> by value
 
 class Chef(override var position: Position) : Positioned {
     var item: Item = Item(NONE)
@@ -333,15 +320,11 @@ class Table(override var position: Position) : Positioned {
     var item: Item = Item(NONE)
 }
 
-class Tables() : ArrayList<Table>() {
+class Tables : ArrayList<Table>()
 
-}
+class Customer(val item: Item, val award: Int)
 
-class Customer(val item: Item, val award: Int) {
-
-}
-
-class Customers() : ArrayList<Customer>() {
+class Customers : ArrayList<Customer>() {
     fun first(): Customer {
         return get(0)
     }
@@ -357,7 +340,8 @@ interface Positioned {
 }
 
 abstract class Action(val name: String, val comment: String? = null) {
-    class Move(val position: Position, comment: String? = null) : Action("MOVE", comment) {
+    @Suppress("unused") // données du jeu de base
+    class Move(private val position: Position, comment: String? = null) : Action("MOVE", comment) {
         override fun toString(): String {
             return if (comment != null) {
                 "$name $position; $comment"
@@ -407,5 +391,4 @@ enum class Equipment(val char: Char, val providedItem: Item? = null) {
     }
 }
 
-class ItemProviderNotFoundException(val item: Item) : Exception("Cannot find provider for ${item}") {
-}
+class ItemProviderNotFoundException(val item: Item) : Exception("Cannot find provider for $item")
