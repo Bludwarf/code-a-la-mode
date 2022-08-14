@@ -1,12 +1,11 @@
 import java.util.*
-import kotlin.collections.ArrayList
 
 // https://www.codingame.com/ide/puzzle/code-a-la-mode
 /**
  * Auto-generated code below aims at helping you parse
  * the standard input according to the problem statement.
  **/
-fun main(args: Array<String>) {
+fun main() {
     val input = Input(Scanner(System.`in`))
     val game = input.nextGame()
 
@@ -26,6 +25,10 @@ fun main(args: Array<String>) {
                 val useWindow = Action.Use(kitchen.getPositionOf(Equipment.WINDOW))
 
                 fun get(item: Item): Action {
+                    val tableWithItem = gameState.findTableWith(item)
+                    if (tableWithItem != null) {
+                        return Action.Use(tableWithItem.position, "Got some ${item.name} on table $tableWithItem")
+                    }
                     val equipment = Equipment.getEquipmentThatProvides(item)
                     val equipmentPosition = kitchen.getPositionOf(equipment)
                     return Action.Use(equipmentPosition, equipment.name)
@@ -86,7 +89,7 @@ fun main(args: Array<String>) {
                     try {
                         val actions = actionsToServe(customer)
                         debug("actions for customer $customer : " + actions.joinToString("\n"))
-                        actionsByCustomer[customer] = actions;
+                        actionsByCustomer[customer] = actions
                     } catch (e: Exception) {
                         debug("Cannot serve $customer because of error : ${e.message}")
                         firstException = e
@@ -153,7 +156,9 @@ class Game(val kitchen: Kitchen) {
 }
 
 class GameState(val player: Chef, val tablesWithItem: Tables, val customers: Customers) {
-
+    fun findTableWith(item: Item): Table? {
+        return tablesWithItem.findTableWith(item)
+    }
 }
 
 class CustomerActionsWithAward(val customer: Customer, val actions: List<Action>, val award: Int)
@@ -234,7 +239,7 @@ value class Input(private val input: Scanner) {
         }
         input.nextLine()
         val kitchen = nextKitchen()
-        return Game(kitchen);
+        return Game(kitchen)
     }
 
     fun nextGameState(): GameState {
@@ -320,16 +325,15 @@ class Table(override var position: Position) : Positioned {
     var item: Item = Item(NONE)
 }
 
-class Tables : ArrayList<Table>()
+class Tables : ArrayList<Table>() {
+    fun findTableWith(item: Item): Table? {
+		return find { table -> table.item == item }
+    }
+}
 
 class Customer(val item: Item, val award: Int)
 
-class Customers : ArrayList<Customer>() {
-    fun first(): Customer {
-        return get(0)
-    }
-
-}
+class Customers : ArrayList<Customer>()
 
 interface Positioned {
     var position: Position
@@ -339,6 +343,7 @@ interface Positioned {
     }
 }
 
+// FIXME modifier equals pour ne pas prendre en compte comment
 abstract class Action(val name: String, val comment: String? = null) {
     @Suppress("unused") // données du jeu de base
     class Move(private val position: Position, comment: String? = null) : Action("MOVE", comment) {
