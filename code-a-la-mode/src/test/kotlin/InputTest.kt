@@ -27,7 +27,7 @@ internal class InputTest {
         val inputStream = newInputStream(Path.of("ligue1/game-state-1"))
         val input = Input(Scanner(inputStream))
 
-        val gameState = input.nextGameState()
+        val gameState = input.nextGameState(Game(Kitchen()))
 
         assertThat(gameState.customers).hasSize(3)
         assertThat(gameState.tablesWithItem).isEmpty()
@@ -39,7 +39,7 @@ internal class InputTest {
         val inputStream = newInputStream(Path.of("ligue1/game-state-with-tables-with-items"))
         val input = Input(Scanner(inputStream))
 
-        val gameState = input.nextGameState()
+        val gameState = input.nextGameState(Game(Kitchen()))
 
         assertThat(gameState.tablesWithItem).containsExactly(
             Table(Position(1, 6), Item("DISH")),
