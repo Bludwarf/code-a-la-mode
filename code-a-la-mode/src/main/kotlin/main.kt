@@ -1,4 +1,7 @@
 import java.util.*
+import kotlin.math.abs
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 // https://www.codingame.com/ide/puzzle/code-a-la-mode
 /**
@@ -22,9 +25,20 @@ fun main() {
 
 class Game(val kitchen: Kitchen)
 
-class GameState(private val game: Game, val player: Chef, val tablesWithItem: Tables, val customers: Customers, val playerScore: Int = 0) {
+data class GameState(
+    private val game: Game,
+    val player: Chef,
+    val partner: Chef,
+    val tablesWithItem: Tables,
+    val customers: Customers,
+    val playerScore: Int = 0
+) {
     fun findTableWith(item: Item): Table? {
         return tablesWithItem.findTableWith(item)
+    }
+
+    fun isEmpty(position: Position): Boolean {
+        return position != player.position && position != partner.position && kitchen.isEmpty(position)
     }
 
     val kitchen: Kitchen
@@ -49,9 +63,7 @@ value class Input(private val input: Scanner) {
     }
 
     private fun nextChef(): Chef {
-        val chef = Chef(nextPosition())
-        chef.item = nextItem()
-        return chef
+        return Chef(nextPosition(), nextItem())
     }
 
     private fun nextTable(): Table {
@@ -85,18 +97,26 @@ value class Input(private val input: Scanner) {
     }
 
     private fun nextKitchen(): Kitchen {
-        val kitchen = Kitchen()
         val equipmentReader = EquipmentReader()
-        for (y in 0 until 7) {
+
+        val emptyPositions = mutableSetOf<Position>()
+        val equipmentPositions = mutableMapOf<Equipment, Position>()
+        for (y in 0 until Position.MAX_Y + 1) {
             val kitchenLine = input.nextLine()
             kitchenLine.forEachIndexed { x, char ->
+                val position = Position(x, y)
+
+                if (char == '.') {
+                    emptyPositions += position
+                }
+
                 val equipment = equipmentReader.read(char)
                 if (equipment != null) {
-                    kitchen.putEquipment(equipment, Position(x, y))
+                    equipmentPositions[equipment] = position
                 }
             }
         }
-        return kitchen
+        return Kitchen(emptyPositions, equipmentPositions)
     }
 
     fun nextGame(): Game {
@@ -114,22 +134,20 @@ value class Input(private val input: Scanner) {
     fun nextGameState(game: Game): GameState {
         @Suppress("UNUSED_VARIABLE") val turnsRemaining = input.nextInt()
         val player = nextChef()
-        @Suppress("UNUSED_VARIABLE") val partner = nextChef()
+        val partner = nextChef()
         val tablesWithItem = readTablesWithItem()
         @Suppress("UNUSED_VARIABLE") val ovenContents = input.next() // ignore until wood 1 league
         @Suppress("UNUSED_VARIABLE") val ovenTimer = input.nextInt()
         val customers = nextCustomers()
-        return GameState(game, player, tablesWithItem, customers)
+        return GameState(game, player, partner, tablesWithItem, customers)
     }
 }
 
-class Kitchen {
-    private val equipmentPositions = mutableMapOf<Equipment, Position>()
+data class Kitchen(
+    private val emptyPositions: Set<Position> = emptySet(),
+    private val equipmentPositions: Map<Equipment, Position> = emptyMap()
+) {
     private val itemProviders = mutableMapOf<Item, ItemProvider?>()
-
-    fun putEquipment(equipment: Equipment, position: Position) {
-        equipmentPositions[equipment] = position
-    }
 
     fun getPositionOf(equipment: Equipment): Position {
         if (!equipmentPositions.containsKey(equipment)) {
@@ -146,6 +164,10 @@ class Kitchen {
         } ?: throw ItemProviderNotFoundException(item)
     }
 
+    fun isEmpty(position: Position): Boolean {
+        return emptyPositions.contains(position)
+    }
+
 }
 
 class EquipmentNotFoundException(equipment: Equipment) : Exception("${equipment.name} not found in the kitchen")
@@ -158,9 +180,15 @@ data class Position(val x: Int, val y: Int) {
     fun isNextTo(position: Position): Boolean {
         return kotlin.math.abs(this.x - position.x) <= 1 && kotlin.math.abs(this.y - position.y) <= 1
     }
-}
 
-private const val NONE = "NONE"
+    fun distanceWith(position: Position): Double {
+        return sqrt(abs(position.x - x).toDouble().pow(2) + abs(position.y - y).toDouble().pow(2))
+    }
+
+    companion object {
+        val MAX_Y = 6
+    }
+}
 
 data class Item(val name: String) {
 
@@ -202,24 +230,28 @@ data class Item(val name: String) {
                 .map { namePart -> if (namePart == name) this else Item(namePart) }
                 .toList()
         )
-    val isNone get() = name == NONE
+    val isNone get() = this == NONE
     val withoutLastBaseItem: Item
         get() {
             val newName = name.substringBeforeLast("-")
             return if (newName.isEmpty()) {
-                Item(NONE)
+                NONE
             } else {
                 Item(newName)
             }
         }
     val isBase get() = !name.contains("-")
 
+    companion object {
+        val NONE = Item("NONE")
+        val DISH = Equipment.DISHWASHER.providedItem
+    }
+
 }
 
 class Items(private val value: List<Item>) : List<Item> by value
 
-class Chef(override var position: Position) : Positioned {
-    var item: Item = Item(NONE)
+data class Chef(override var position: Position, val item: Item = Item.NONE) : Positioned {
 
     fun needsToDropItemToPrepare(itemToPrepare: Item): Boolean {
         return !item.isNone && !itemToPrepare.contains(this.item)
@@ -227,7 +259,7 @@ class Chef(override var position: Position) : Positioned {
 
 }
 
-data class Table(override val position: Position, val item: Item = Item(NONE)) : Positioned
+data class Table(override val position: Position, val item: Item = Item.NONE) : Positioned
 
 class Tables : ArrayList<Table>() {
     fun findTableWith(item: Item): Table? {
@@ -268,8 +300,7 @@ abstract class Action(val name: String, val comment: String? = null) {
         return name.hashCode()
     }
 
-    @Suppress("unused") // données du jeu de base
-    class Move(private val position: Position, comment: String? = null) : Action("MOVE", comment) {
+    class Move(val position: Position, comment: String? = null) : Action("MOVE", comment) {
         override fun toString(): String {
             return if (comment != null) {
                 "$name $position; $comment"
@@ -550,8 +581,116 @@ class BestActionResolver(private val possibleActionResolver: PossibleActionResol
 
 class Simulator {
     fun simulate(gameState: GameState, action: Action): GameState {
-        // TODO
-        return gameState;
+        return if (action is Action.Use) {
+            simulate(gameState, action)
+        } else {
+            gameState
+        }
+    }
+
+    private fun simulate(
+        gameState: GameState,
+        action: Action.Use,
+        visitedPositions: Set<Position> = setOf(gameState.player.position),
+        remainingMoves: Int = 4
+    ): GameState {
+        return if (gameState.player.position.isNextTo(action.position)) {
+            if (action.position == gameState.kitchen.getPositionOf(Equipment.DISHWASHER)) {
+                simulateUseDishwasher(gameState)
+            } else {
+                TODO("simulate $action")
+            }
+        } else {
+            simulate(gameState, Action.Move(action.position, action.comment), stopNextToPosition = true)
+        }
+    }
+
+    private fun simulate(
+        gameState: GameState,
+        action: Action.Move,
+        visitedPositions: Set<Position> = setOf(gameState.player.position),
+        remainingMoves: Int = 4,
+        stopNextToPosition: Boolean = false
+    ): GameState {
+        val stopCondition = if (stopNextToPosition) gameState.player.position.isNextTo(action.position) else gameState.player.position == action.position
+        return if (stopCondition) {
+            gameState
+        } else {
+            val player = gameState.player
+            if (remainingMoves == 0 || player.position == action.position || visitedPositions.contains(action.position)) {
+                gameState
+            } else {
+                val nextEmptyPositions = nextEmptyPositions(gameState) - visitedPositions
+                if (nextEmptyPositions.isEmpty()) {
+                    gameState
+                } else {
+                    val nextGameStates = nextEmptyPositions
+                        .map { nextEmptyPosition ->
+                            val gameStateAfterMove = gameState.copy(
+                                player = player.copy(
+                                    position = nextEmptyPosition
+                                )
+                            )
+                            simulate(
+                                gameStateAfterMove, action, visitedPositions + nextEmptyPosition, remainingMoves - 1,
+                                stopNextToPosition = stopNextToPosition
+                            )
+                        }
+                    (nextGameStates + gameState)
+                        .minByOrNull { nextGameState -> nextGameState.player.position.distanceWith(action.position) }!!
+                }
+            }
+        }
+    }
+
+    private fun simulateUseDishwasher(gameState: GameState): GameState {
+        val player = gameState.player
+        val playerHasDish = player.item == Item.DISH
+        return if (playerHasDish) {
+            dropDishToDishwasher(gameState)
+        } else {
+            grabDishFromDishwasher(gameState)
+        }
+    }
+
+    private fun dropDishToDishwasher(gameState: GameState): GameState {
+        // TODO inc dish count
+        return gameState.copy(
+            player = gameState.player.copy(
+                item = Item.NONE
+            )
+        )
+    }
+
+    private fun grabDishFromDishwasher(gameState: GameState): GameState {
+        // TODO dec dish count
+        return gameState.copy(
+            player = gameState.player.copy(
+                item = Item.DISH
+            )
+        )
+    }
+
+    private fun nextEmptyPositions(gameState: GameState): Set<Position> {
+        val playerPosition = gameState.player.position
+        val x = playerPosition.x
+        val y = playerPosition.y
+
+        val adjacentPositions = listOf(
+            Position(x, y - 1),
+            Position(x - 1, y),
+            Position(x + 1, y),
+            Position(x, y + 1),
+        )
+
+        val nextEmptyPositions = mutableSetOf<Position>()
+        for (adjacentPosition in adjacentPositions) {
+            // TODO max x
+            if (x >= 0 && y >= 0 && y <= Position.MAX_Y && gameState.isEmpty(adjacentPosition)) {
+                nextEmptyPositions += adjacentPosition
+            }
+        }
+        return nextEmptyPositions.toSet()
     }
 
 }
