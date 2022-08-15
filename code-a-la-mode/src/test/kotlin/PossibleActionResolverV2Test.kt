@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 internal class PossibleActionResolverV2Test {
 
     @Test
-    fun nextGame() {
+    fun computeNextPossibleActions() {
         val gameState = gameState("ligue2/game-2362403142607370200-state-1.txt")
         val possibleActionResolver = PossibleActionResolverV2(gameState)
 
