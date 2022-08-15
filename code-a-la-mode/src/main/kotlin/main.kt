@@ -22,7 +22,7 @@ fun main() {
 
 class Game(val kitchen: Kitchen)
 
-class GameState(val game: Game, val player: Chef, val tablesWithItem: Tables, val customers: Customers, val playerScore: Int = 0) {
+class GameState(private val game: Game, val player: Chef, val tablesWithItem: Tables, val customers: Customers, val playerScore: Int = 0) {
     fun findTableWith(item: Item): Table? {
         return tablesWithItem.findTableWith(item)
     }
