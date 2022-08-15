@@ -200,7 +200,11 @@ class Tables : ArrayList<Table>() {
     }
 }
 
-class Customer(val item: Item, val award: Int) {
+class Customer(
+    val item: Item,
+    /** award intrinsèque + nombre de tours restants */
+    val award: Int
+    ) {
     override fun toString(): String {
         return "Customer(item = $item, award = $award)"
     }
