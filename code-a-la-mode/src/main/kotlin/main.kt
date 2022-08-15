@@ -29,12 +29,16 @@ data class GameState(
     private val game: Game,
     val player: Chef,
     val partner: Chef,
-    val tablesWithItem: Tables,
+    val tablesWithItem: List<Table>,
     val customers: List<Customer>,
     val playerScore: Int = 0
 ) {
     fun findTableWith(item: Item): Table? {
-        return tablesWithItem.findTableWith(item)
+        return tablesWithItem.firstOrNull { table -> table.item == item }
+    }
+
+    fun getTableAt(position: Position): Table? {
+        return tablesWithItem.firstOrNull() { table -> table.position == position }
     }
 
     fun isEmpty(position: Position): Boolean {
@@ -74,15 +78,15 @@ value class Input(private val input: Scanner) {
         return Customer(nextItem(), input.nextInt())
     }
 
-    private fun readTablesWithItem(): Tables {
-        val tables = Tables()
+    private fun readTablesWithItem(): List<Table> {
+        val tables = mutableListOf<Table>()
         val numTablesWithItems = input.nextInt() // the number of tables in the kitchen that currently hold an item
         for (i in 0 until numTablesWithItems) {
             val table = nextTable()
             System.err.println("table : $table")
             tables.add(table)
         }
-        return tables
+        return tables.toList()
     }
 
     private fun nextCustomers(): List<Customer> {
@@ -285,12 +289,6 @@ data class Chef(override var position: Position, val item: Item = Item.NONE) : P
 }
 
 data class Table(override val position: Position, val item: Item = Item.NONE) : Positioned
-
-class Tables : ArrayList<Table>() {
-    fun findTableWith(item: Item): Table? {
-        return find { table -> table.item == item }
-    }
-}
 
 class Customer(
     val item: Item,
@@ -588,6 +586,7 @@ class PossibleActionResolverV2(gameState: GameState) : PossibleActionResolver(ga
     }
 
     private fun get(item: Item): Set<Action> {
+
         val possibleActions = mutableSetOf<Action>()
 
         val tableWithItem = gameState.findTableWith(item)
@@ -595,11 +594,16 @@ class PossibleActionResolverV2(gameState: GameState) : PossibleActionResolver(ga
             possibleActions += Action.Use(tableWithItem.position, "Got some ${item.name} on table $tableWithItem")
         }
 
-        val equipment = kitchen.getEquipmentThatProvides(item)
-        val equipmentPosition = kitchen.getPositionOf(equipment)
-        possibleActions += Action.Use(equipmentPosition, equipment.name)
+        try {
+            val equipment = kitchen.getEquipmentThatProvides(item)
+            val equipmentPosition = kitchen.getPositionOf(equipment)
+            possibleActions += Action.Use(equipmentPosition, equipment.name)
+        } catch (e: ItemProviderNotFoundException) {
+            possibleActions += setOf(Action.Wait(e.message)) // on attend que quelqu'un d'autre prépare le baseItem
+        }
 
         return possibleActions.toSet()
+
     }
 }
 
@@ -646,6 +650,12 @@ class Simulator {
     private fun simulate(gameState: GameState, action: Action.Use): GameState {
         val position = action.position
         if (gameState.player.position.isNextTo(position)) {
+
+            val table = gameState.getTableAt(position)
+            if (table != null) {
+                return simulateUse(table, gameState)
+            }
+
             val equipment = gameState.kitchen.getEquipmentAt(position)
             if (equipment != null) {
                 if (equipment == Equipment.DISHWASHER) {
@@ -656,11 +666,22 @@ class Simulator {
                     return simulateUse(equipment, gameState)
                 }
             }
+
             debug("TODO simulate $action")
             TODO("simulate $action")
         } else {
             return simulate(gameState, Action.Move(position, action.comment), stopNextToPosition = true)
         }
+    }
+
+    private fun simulateUse(table: Table, gameState: GameState): GameState {
+        val player = gameState.player
+        return gameState.copy(
+            tablesWithItem = gameState.tablesWithItem - table,
+            player = if (table.item.isNone) player else player.copy(
+                item = player.item.with(table.item)
+            )
+        )
     }
 
     private fun simulate(
@@ -711,7 +732,8 @@ class Simulator {
 
     private fun simulateUseWindow(gameState: GameState): GameState {
         val player = gameState.player
-        val customerThatWantPlayerItem = gameState.customers.firstOrNull { customer -> customer.item == player.item }
+        val customerThatWantPlayerItem =
+            gameState.customers.firstOrNull { customer -> customer.item == player.item }
         return if (customerThatWantPlayerItem != null) {
             gameState.copy(
                 player = player.copy(
