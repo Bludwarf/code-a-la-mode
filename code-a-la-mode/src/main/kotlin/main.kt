@@ -13,11 +13,8 @@ fun main() {
     while (true) {
         val gameState = input.nextGameState(game)
 
-        val actionResolver: PossibleActionResolver = PossibleActionResolverV1(gameState)
-        val nextPossibleActions = actionResolver.computeNextPossibleActions()
-
-        // TODO choisir la meilleure action
-        val action = nextPossibleActions.firstOrNull() ?: Action.Wait()
+        val bestActionResolver = BestActionResolver(PossibleActionResolverV2(gameState))
+        val action = bestActionResolver.resolveBestActionFrom(gameState)
 
         println(action)
     }
@@ -25,7 +22,7 @@ fun main() {
 
 class Game(val kitchen: Kitchen)
 
-class GameState(val game: Game, val player: Chef, val tablesWithItem: Tables, val customers: Customers) {
+class GameState(val game: Game, val player: Chef, val tablesWithItem: Tables, val customers: Customers, val playerScore: Int = 0) {
     fun findTableWith(item: Item): Table? {
         return tablesWithItem.findTableWith(item)
     }
@@ -526,4 +523,35 @@ class PossibleActionResolverV2(gameState: GameState) : PossibleActionResolver(ga
 
         return possibleActions.toSet()
     }
+}
+
+class BestActionResolver(private val possibleActionResolver: PossibleActionResolver) {
+    private val simulator = Simulator()
+
+    fun resolveBestActionFrom(gameState: GameState): Action {
+        val nextPossibleActions = possibleActionResolver.computeNextPossibleActions()
+        val defaultAction = Action.Wait()
+
+        return if (nextPossibleActions.isEmpty()) {
+            defaultAction
+        } else if (nextPossibleActions.size == 1) {
+            nextPossibleActions.first()
+        } else {
+            nextPossibleActions.maxByOrNull { action -> computeAwardOf(action, gameState) } ?: defaultAction
+        }
+    }
+
+    private fun computeAwardOf(action: Action, gameStateBeforeAction: GameState): Int {
+        val gameStateAfterAction = simulator.simulate(gameStateBeforeAction, action)
+        return gameStateAfterAction.playerScore - gameStateBeforeAction.playerScore
+    }
+
+}
+
+class Simulator {
+    fun simulate(gameState: GameState, action: Action): GameState {
+        // TODO
+        return gameState;
+    }
+
 }
