@@ -165,10 +165,38 @@ data class Position(val x: Int, val y: Int) {
 
 private const val NONE = "NONE"
 
-@JvmInline
-value class Item(val name: String) { // FIXME il faudrait séparer BaseItem et ComposedItem
+data class Item(val name: String) {
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other?.javaClass != javaClass) return false
+        other as Item
+
+        if (isBase) {
+            if (!other.isBase) {
+                return false
+            }
+            return name == other.name
+        }
+        if (other.isBase) {
+            return false
+        }
+
+        val sortedBaseItems = baseItems.sortedBy { item -> item.name }
+        val otherSortedBaseItems = other.baseItems.sortedBy { item -> item.name }
+        return sortedBaseItems == otherSortedBaseItems
+    }
+
+    override fun hashCode(): Int {
+        if (isBase) {
+            return name.hashCode()
+        }
+        val sortedBaseItems = baseItems.sortedBy { item -> item.name }
+        return sortedBaseItems.hashCode()
+    }
+
     fun contains(item: Item): Boolean {
-        return name.startsWith(item.name) // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
+        return name.startsWith(item.name)
     }
 
     val baseItems: Items
@@ -335,7 +363,7 @@ class PossibleActionResolverV1(gameState: GameState) : PossibleActionResolver(ga
 
                 fun prepare(item: Item): List<Action> {
 
-                    if (item.isNone || player.item == item) { // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
+                    if (item.isNone || player.item == item) {
                         return emptyList()
                     }
 
@@ -347,7 +375,7 @@ class PossibleActionResolverV1(gameState: GameState) : PossibleActionResolver(ga
 
                     if (item.isBase) {
                         actions += get(item)
-                    } else if (player.item != item) { // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
+                    } else if (player.item != item) {
                         actions += prepare(item.withoutLastBaseItem)
                         actions += get(item.baseItems.last())
                     }
@@ -462,7 +490,7 @@ class PossibleActionResolverV2(gameState: GameState) : PossibleActionResolver(ga
 
     private fun prepare(item: Item): Set<Action> {
 
-        if (item.isNone || player.item == item) { // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
+        if (item.isNone || player.item == item) {
             return emptySet()
         }
 
@@ -472,7 +500,7 @@ class PossibleActionResolverV2(gameState: GameState) : PossibleActionResolver(ga
 
         if (item.isBase) {
             return get(item)
-        } else if (player.item != item) { // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
+        } else if (player.item != item) {
             return prepare(item.withoutLastBaseItem)
         }
 
