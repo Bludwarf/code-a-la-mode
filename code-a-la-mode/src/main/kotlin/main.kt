@@ -312,8 +312,6 @@ class PossibleActionResolverV1(gameState: GameState) : PossibleActionResolver(ga
                 }
 
                 fun prepare(item: Item): List<Action> {
-                    debug("player.item.name : ${player.item.name}")
-                    debug("item to prepare  : $item")
 
                     if (item.isNone || player.item == item) { // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
                         return emptyList()
@@ -361,7 +359,6 @@ class PossibleActionResolverV1(gameState: GameState) : PossibleActionResolver(ga
                 for (customer in customers) {
                     try {
                         val actions = actionsToServe(customer)
-                        debug("actions for customer $customer : " + actions.joinToString("\n"))
                         actionsByCustomer[customer] = actions
                     } catch (e: Exception) {
                         debug("Cannot serve $customer because of error : ${e.message}")
@@ -405,8 +402,6 @@ class PossibleActionResolverV1(gameState: GameState) : PossibleActionResolver(ga
                     val bestValuableCustomer = chooseCustomerWithMaxAward(actionsByCustomer)
                     val actions = actionsByCustomer[bestValuableCustomer]!!
 
-                    debug("actions : " + actions.joinToString("\n"))
-
                     actions.firstOrNull() ?: Action.Wait("No action to perform")
                 }
 
@@ -444,8 +439,6 @@ class PossibleActionResolverV2(gameState: GameState) : PossibleActionResolver(ga
     }
 
     private fun prepare(item: Item): Set<Action> {
-        debug("player.item.name : ${player.item.name}")
-        debug("item to prepare  : $item")
 
         if (item.isNone || player.item == item) { // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
             return emptySet()
