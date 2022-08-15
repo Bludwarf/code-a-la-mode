@@ -1,5 +1,6 @@
 
 import Item.Companion.ICE_CREAM
+import Item.Companion.NONE
 import TestUtils.Companion.DISH
 import TestUtils.Companion.gameState
 import org.assertj.core.api.Assertions.assertThat
@@ -49,6 +50,20 @@ internal class SimulatorTest {
         val gameState11 = simulator.simulate(gameState10, action)
         assertThat(gameState11.player.position).isEqualTo(Position(4, 4))
         assertThat(gameState11.player.item).isEqualTo(DISH.with(ICE_CREAM))
+
+    }
+
+    @Test
+    fun simulate_state23() {
+        val gameState23 = gameState("ligue2/game-2362403142607370200-state-23.txt")
+
+        val simulator = Simulator()
+        val action = Action.Use(gameState23.kitchen.getPositionOf(Equipment.WINDOW))
+
+        val gameState24 = simulator.simulate(gameState23, action)
+        assertThat(gameState24.player.item).isEqualTo(NONE)
+        assertThat(gameState24.player.position).isEqualTo(gameState23.player.position)
+        assertThat(gameState24.customers).hasSize(gameState23.customers.size - 1)
 
     }
 

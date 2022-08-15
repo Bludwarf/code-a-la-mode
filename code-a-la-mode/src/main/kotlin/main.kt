@@ -30,7 +30,7 @@ data class GameState(
     val player: Chef,
     val partner: Chef,
     val tablesWithItem: Tables,
-    val customers: Customers,
+    val customers: List<Customer>,
     val playerScore: Int = 0
 ) {
     fun findTableWith(item: Item): Table? {
@@ -85,15 +85,15 @@ value class Input(private val input: Scanner) {
         return tables
     }
 
-    private fun nextCustomers(): Customers {
-        val customers = Customers()
+    private fun nextCustomers(): List<Customer> {
+        val customers = mutableListOf<Customer>()
         val numCustomers = input.nextInt() // the number of customers currently waiting for food
         for (i in 0 until numCustomers) {
             val customer = nextCustomer()
             System.err.println("customer : $customer")
             customers.add(customer)
         }
-        return customers
+        return customers.toList()
     }
 
     private fun nextKitchen(): Kitchen {
@@ -301,8 +301,6 @@ class Customer(
         return "Customer(item = $item, award = $award)"
     }
 }
-
-class Customers : ArrayList<Customer>()
 
 interface Positioned {
     val position: Position
@@ -652,6 +650,8 @@ class Simulator {
             if (equipment != null) {
                 if (equipment == Equipment.DISHWASHER) {
                     return simulateUseDishwasher(gameState)
+                } else if (equipment == Equipment.WINDOW) {
+                    return simulateUseWindow(gameState)
                 } else if (equipment is ItemProvider) {
                     return simulateUse(equipment, gameState)
                 }
@@ -706,6 +706,22 @@ class Simulator {
             dropDishToDishwasher(gameState)
         } else {
             grabDishFromDishwasher(gameState)
+        }
+    }
+
+    private fun simulateUseWindow(gameState: GameState): GameState {
+        val player = gameState.player
+        val customerThatWantPlayerItem = gameState.customers.firstOrNull { customer -> customer.item == player.item }
+        return if (customerThatWantPlayerItem != null) {
+            gameState.copy(
+                player = player.copy(
+                    item = Item.NONE
+                ),
+                customers = gameState.customers - customerThatWantPlayerItem,
+                playerScore = gameState.playerScore + customerThatWantPlayerItem.award,
+            )
+        } else {
+            gameState
         }
     }
 
