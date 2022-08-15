@@ -15,7 +15,10 @@ internal class PossibleActionResolverV2Test {
 
         val kitchen = gameState.kitchen
         assertThat(nextPossibleActions).containsExactly(
-            Action.Use(kitchen.getPositionOf(Equipment.DISHWASHER))
+            Action.Use(kitchen.getPositionOf(Equipment.DISHWASHER)),
+            Action.Use(kitchen.getPositionOf(kitchen.getEquipmentThatProvides(Item.ICE_CREAM))),
+            Action.Use(kitchen.getPositionOf(kitchen.getEquipmentThatProvides(Item.BLUEBERRIES))),
+            Action.Wait("Cannot find provider for Item(name=CHOPPED_STRAWBERRIES)"),
         )
     }
 

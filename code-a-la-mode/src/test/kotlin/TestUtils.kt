@@ -1,3 +1,4 @@
+
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -6,8 +7,7 @@ import java.util.*
 class TestUtils {
     companion object {
 
-        val ICE_CREAM = Item("ICE_CREAM")
-        val BLUEBERRIES = Item("BLUEBERRIES")
+        val DISH = Item("DISH")
 
         fun newInputStream(resourcesRelativePath: Path): InputStream {
             val resourcesPath = Path.of("src/test/resources")
@@ -34,6 +34,12 @@ class TestUtils {
             val inputStream = newInputStream(Path.of(path))
             val input = Input(Scanner(inputStream))
             return input
+        }
+
+        fun action(expectedActionString: String): Action {
+            val inputStream = expectedActionString.byteInputStream()
+            val input = Input(Scanner(inputStream))
+            return input.nextAction()
         }
 
     }

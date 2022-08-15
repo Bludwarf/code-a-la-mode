@@ -1,7 +1,7 @@
 
 
-import TestUtils.Companion.BLUEBERRIES
-import TestUtils.Companion.ICE_CREAM
+import Item.Companion.BLUEBERRIES
+import Item.Companion.ICE_CREAM
 import TestUtils.Companion.newInputStream
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test

@@ -45,7 +45,7 @@ data class GameState(
         get() = game.kitchen
 }
 
-class CustomerActionsWithAward(val customer: Customer, val actions: List<Action>, val award: Int)
+class CustomerActionsWithAward(val customer: Customer, val award: Int)
 
 fun debug(message: String) {
     System.err.println(message)
@@ -141,6 +141,14 @@ value class Input(private val input: Scanner) {
         val customers = nextCustomers()
         return GameState(game, player, partner, tablesWithItem, customers)
     }
+
+    internal fun nextAction(): Action {
+        val actionName = input.next()
+        if (actionName == "USE") {
+            return Action.Use(nextPosition())
+        }
+        TODO("nextAction for $actionName")
+    }
 }
 
 data class Kitchen(
@@ -168,6 +176,11 @@ data class Kitchen(
         return emptyPositions.contains(position)
     }
 
+    fun getEquipmentAt(position: Position): Equipment? {
+        val entry = equipmentPositions.entries.firstOrNull { entry -> entry.value == position }
+        return entry?.key
+    }
+
 }
 
 class EquipmentNotFoundException(equipment: Equipment) : Exception("${equipment.name} not found in the kitchen")
@@ -178,7 +191,7 @@ data class Position(val x: Int, val y: Int) {
     }
 
     fun isNextTo(position: Position): Boolean {
-        return kotlin.math.abs(this.x - position.x) <= 1 && kotlin.math.abs(this.y - position.y) <= 1
+        return abs(this.x - position.x) <= 1 && abs(this.y - position.y) <= 1
     }
 
     fun distanceWith(position: Position): Double {
@@ -186,7 +199,7 @@ data class Position(val x: Int, val y: Int) {
     }
 
     companion object {
-        val MAX_Y = 6
+        const val MAX_Y = 6
     }
 }
 
@@ -224,6 +237,16 @@ data class Item(val name: String) {
         return name.startsWith(item.name)
     }
 
+    fun with(otherItem: Item): Item {
+        return if (this == otherItem || baseItems.contains(otherItem)) {
+            this
+        } else {
+            copy(
+                name = "$name-${otherItem.name}"
+            )
+        }
+    }
+
     val baseItems: Items
         get() = Items(
             name.split("-")
@@ -244,7 +267,9 @@ data class Item(val name: String) {
 
     companion object {
         val NONE = Item("NONE")
-        val DISH = Equipment.DISHWASHER.providedItem
+        val DISH = Item("DISH")
+        val ICE_CREAM = Item("ICE_CREAM")
+        val BLUEBERRIES = Item("BLUEBERRIES")
     }
 
 }
@@ -269,7 +294,7 @@ class Tables : ArrayList<Table>() {
 
 class Customer(
     val item: Item,
-    /** award intrinsèque + nombre de tours restants */
+    /** Award intrinsèque + nombre de tours restants */
     val award: Int
 ) {
     override fun toString(): String {
@@ -308,6 +333,18 @@ abstract class Action(val name: String, val comment: String? = null) {
                 "$name $position"
             }
         }
+
+        override fun equals(other: Any?): Boolean {
+            if (!super.equals(other)) return false
+            if (this === other) return true
+            if (other.javaClass != javaClass) return false
+            other as Move
+            return position == other.position
+        }
+
+        override fun hashCode(): Int {
+            return "$name $position".hashCode()
+        }
     }
 
     class Use(val position: Position, comment: String? = null) : Action("USE", comment) {
@@ -317,6 +354,18 @@ abstract class Action(val name: String, val comment: String? = null) {
             } else {
                 "$name $position"
             }
+        }
+
+        override fun equals(other: Any?): Boolean {
+            if (!super.equals(other)) return false
+            if (this === other) return true
+            if (other.javaClass != javaClass) return false
+            other as Use
+            return position == other.position
+        }
+
+        override fun hashCode(): Int {
+            return "$name $position".hashCode()
         }
     }
 
@@ -337,8 +386,8 @@ class EquipmentReader {
         return when (char) {
             'D' -> Equipment.DISHWASHER
             'W' -> Equipment.WINDOW
-            'B' -> ItemProvider("BLUBERRIES_CRATE", Item("BLUEBERRIES"))
-            'I' -> ItemProvider("ICE_CREAM_CRATE", Item("ICE_CREAM"))
+            'B' -> ItemProvider("BLUEBERRIES_CRATE", Item.BLUEBERRIES)
+            'I' -> ItemProvider("ICE_CREAM_CRATE", Item.ICE_CREAM)
             '#', '.' -> null
             else -> {
                 debug("Unknown equipment char : $char")
@@ -351,7 +400,7 @@ class EquipmentReader {
 open class Equipment(val name: String) {
 
     companion object {
-        val DISHWASHER = ItemProvider("DISHWASHER", Item("DISH"))
+        val DISHWASHER = ItemProvider("DISHWASHER", Item.DISH)
         val WINDOW = Equipment("WINDOW")
     }
 }
@@ -467,7 +516,7 @@ class PossibleActionResolverV1(gameState: GameState) : PossibleActionResolver(ga
                     return actionsByCustomer
                         .map { (customer, actions) ->
                             val actionsAward = customer.award - costOf(actions)
-                            CustomerActionsWithAward(customer, actions, actionsAward)
+                            CustomerActionsWithAward(customer, actionsAward)
                         }
                         .maxByOrNull(CustomerActionsWithAward::award)!!
                         .customer
@@ -504,35 +553,35 @@ class PossibleActionResolverV2(gameState: GameState) : PossibleActionResolver(ga
     }
 
     private fun serve(customer: Customer): Set<Action> {
-        return if (player.item == customer.item) {
-            setOf(Action.Use(kitchen.getPositionOf(Equipment.WINDOW)))
-        } else {
-            val tableWithItem = tablesWithItem.find { table -> table.item == customer.item }
-            if (tableWithItem != null) {
-                setOf(Action.Use(tableWithItem.position, tableWithItem.toString()))
+        return try {
+            if (player.item == customer.item) {
+                setOf(Action.Use(kitchen.getPositionOf(Equipment.WINDOW)))
             } else {
-                prepare(customer.item)
+                val tableWithItem = tablesWithItem.find { table -> table.item == customer.item }
+                if (tableWithItem != null) {
+                    setOf(Action.Use(tableWithItem.position, tableWithItem.toString()))
+                } else {
+                    prepare(customer.item)
+                }
             }
+        } catch (e: Exception) {
+            setOf(Action.Wait(e.message))
         }
     }
 
     private fun prepare(item: Item): Set<Action> {
-
-        if (item.isNone || player.item == item) {
-            return emptySet()
+        return if (item.isNone || player.item == item) {
+            emptySet()
+        } else if (item.isBase) {
+            get(item)
+        } else if (player.needsToDropItemToPrepare(item)) {
+            dropPlayerItem()
+        } else {
+            val playerBaseItems = player.item.baseItems
+            (item.baseItems - playerBaseItems)
+                .flatMap { baseItem -> prepare(baseItem) }
+                .toSet()
         }
-
-        if (player.needsToDropItemToPrepare(item)) {
-            return dropPlayerItem()
-        }
-
-        if (item.isBase) {
-            return get(item)
-        } else if (player.item != item) {
-            return prepare(item.withoutLastBaseItem)
-        }
-
-        return emptySet() // TODO dans quel cas on arrive ici ?
     }
 
     private fun dropPlayerItem(): Set<Action> {
@@ -581,63 +630,70 @@ class BestActionResolver(private val possibleActionResolver: PossibleActionResol
 
 class Simulator {
     fun simulate(gameState: GameState, action: Action): GameState {
-        return if (action is Action.Use) {
-            simulate(gameState, action)
-        } else {
-            gameState
+        return when (action) {
+            is Action.Use -> {
+                simulate(gameState, action)
+            }
+
+            is Action.Move -> {
+                simulate(gameState, action)
+            }
+
+            else -> {
+                gameState
+            }
         }
     }
 
-    private fun simulate(
-        gameState: GameState,
-        action: Action.Use,
-        visitedPositions: Set<Position> = setOf(gameState.player.position),
-        remainingMoves: Int = 4
-    ): GameState {
-        return if (gameState.player.position.isNextTo(action.position)) {
-            if (action.position == gameState.kitchen.getPositionOf(Equipment.DISHWASHER)) {
-                simulateUseDishwasher(gameState)
-            } else {
-                TODO("simulate $action")
+    private fun simulate(gameState: GameState, action: Action.Use): GameState {
+        val position = action.position
+        if (gameState.player.position.isNextTo(position)) {
+            val equipment = gameState.kitchen.getEquipmentAt(position)
+            if (equipment != null) {
+                if (equipment == Equipment.DISHWASHER) {
+                    return simulateUseDishwasher(gameState)
+                } else if (equipment is ItemProvider) {
+                    return simulateUse(equipment, gameState)
+                }
             }
+            debug("TODO simulate $action")
+            TODO("simulate $action")
         } else {
-            simulate(gameState, Action.Move(action.position, action.comment), stopNextToPosition = true)
+            return simulate(gameState, Action.Move(position, action.comment), stopNextToPosition = true)
         }
     }
 
     private fun simulate(
         gameState: GameState,
         action: Action.Move,
-        visitedPositions: Set<Position> = setOf(gameState.player.position),
-        remainingMoves: Int = 4,
         stopNextToPosition: Boolean = false
     ): GameState {
-        val stopCondition = if (stopNextToPosition) gameState.player.position.isNextTo(action.position) else gameState.player.position == action.position
+        val stopCondition =
+            if (stopNextToPosition) gameState.player.position.isNextTo(action.position) else gameState.player.position == action.position
         return if (stopCondition) {
             gameState
         } else {
             val player = gameState.player
-            if (remainingMoves == 0 || player.position == action.position || visitedPositions.contains(action.position)) {
+            if (player.position == action.position) {
                 gameState
+            } else if (player.position.isNextTo(action.position)) {
+                gameState.copy(
+                    player = player.copy(
+                        position = action.position
+                    )
+                )
             } else {
-                val nextEmptyPositions = nextEmptyPositions(gameState) - visitedPositions
-                if (nextEmptyPositions.isEmpty()) {
+                val pathFinder = PathFinder(gameState)
+                val path = pathFinder.findPath(player.position, action.position)
+                if (path == null) {
                     gameState
                 } else {
-                    val nextGameStates = nextEmptyPositions
-                        .map { nextEmptyPosition ->
-                            val gameStateAfterMove = gameState.copy(
-                                player = player.copy(
-                                    position = nextEmptyPosition
-                                )
-                            )
-                            simulate(
-                                gameStateAfterMove, action, visitedPositions + nextEmptyPosition, remainingMoves - 1,
-                                stopNextToPosition = stopNextToPosition
-                            )
-                        }
-                    (nextGameStates + gameState)
-                        .minByOrNull { nextGameState -> nextGameState.player.position.distanceWith(action.position) }!!
+                    val nextPlayerPosition = path.subPath(4).lastOrNextOf(action.position)
+                    gameState.copy(
+                        player = player.copy(
+                            position = nextPlayerPosition
+                        )
+                    )
                 }
             }
         }
@@ -651,6 +707,14 @@ class Simulator {
         } else {
             grabDishFromDishwasher(gameState)
         }
+    }
+
+    private fun simulateUse(equipment: ItemProvider, gameState: GameState): GameState {
+        return gameState.copy(
+            player = gameState.player.copy(
+                item = gameState.player.item.with(equipment.providedItem)
+            )
+        )
     }
 
     private fun dropDishToDishwasher(gameState: GameState): GameState {
@@ -671,10 +735,40 @@ class Simulator {
         )
     }
 
-    private fun nextEmptyPositions(gameState: GameState): Set<Position> {
-        val playerPosition = gameState.player.position
-        val x = playerPosition.x
-        val y = playerPosition.y
+}
+
+class PathFinder(private val gameState: GameState) {
+
+    internal fun findPath(position: Position, target: Position): Path? {
+        return possiblePaths(position, target)
+            .sortedWith(
+                Comparator.comparing<Path?, Double?> { path -> path.minDistanceWith(target) }
+                    .thenComparing { path -> path.size }
+            )
+            .firstOrNull()
+    }
+
+    internal fun possiblePaths(
+        position: Position,
+        target: Position,
+        path: Path = Path(listOf(gameState.player.position))
+    ): List<Path> {
+        if (position == target) {
+            return listOf(path)
+        }
+        val nextPositions = nextEmptyPositions(position) - path.positions.toSet()
+        return if (nextPositions.isEmpty()) {
+            listOf(path)
+        } else {
+            nextPositions
+                .map { nextPosition -> path.copy(positions = path.positions + nextPosition) }
+                .flatMap { nextPath -> possiblePaths(nextPath.end, target, nextPath) }
+        }
+    }
+
+    private fun nextEmptyPositions(position: Position): Set<Position> {
+        val x = position.x
+        val y = position.y
 
         val adjacentPositions = listOf(
             Position(x, y - 1),
@@ -692,5 +786,22 @@ class Simulator {
         }
         return nextEmptyPositions.toSet()
     }
+}
 
+data class Path(val positions: List<Position>) : List<Position> by positions {
+    fun minDistanceWith(target: Position): Double {
+        return positions.minOf { position -> position.distanceWith(target) }
+    }
+
+    val end: Position get() = positions.last()
+
+    fun subPath(maxDistance: Int): Path {
+        return copy(
+            positions = positions.subList(0, positions.size.coerceAtMost(maxDistance + 1))
+        )
+    }
+
+    fun lastOrNextOf(targetPosition: Position): Position {
+        return positions.firstOrNull { position -> position.isNextTo(targetPosition) } ?: positions.last()
+    }
 }
