@@ -1,5 +1,7 @@
 
 
+import TestUtils.Companion.BLUEBERRIES
+import TestUtils.Companion.ICE_CREAM
 import TestUtils.Companion.newInputStream
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -17,8 +19,8 @@ internal class InputTest {
 
         val kitchen = game.kitchen
         assertThat(kitchen.getPositionOf(Equipment.DISHWASHER)).isEqualTo(Position(5, 0))
-        assertThat(kitchen.getPositionOf(Equipment.ICE_CREAM_CRATE)).isEqualTo(Position(0, 1))
-        assertThat(kitchen.getPositionOf(Equipment.BLUBERRIES_CRATE)).isEqualTo(Position(5, 4))
+        assertThat(kitchen.getPositionOf(kitchen.getEquipmentThatProvides(ICE_CREAM))).isEqualTo(Position(0, 1))
+        assertThat(kitchen.getPositionOf(kitchen.getEquipmentThatProvides(BLUEBERRIES))).isEqualTo(Position(5, 4))
         assertThat(kitchen.getPositionOf(Equipment.WINDOW)).isEqualTo(Position(5, 6))
     }
 

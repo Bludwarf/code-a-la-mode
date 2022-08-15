@@ -5,6 +5,10 @@ import java.util.*
 
 class TestUtils {
     companion object {
+
+        val ICE_CREAM = Item("ICE_CREAM")
+        val BLUEBERRIES = Item("BLUEBERRIES")
+
         fun newInputStream(resourcesRelativePath: Path): InputStream {
             val resourcesPath = Path.of("src/test/resources")
             return Files.newInputStream(resourcesPath.resolve(resourcesRelativePath))

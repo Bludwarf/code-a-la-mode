@@ -89,10 +89,11 @@ value class Input(private val input: Scanner) {
 
     private fun nextKitchen(): Kitchen {
         val kitchen = Kitchen()
+        val equipmentReader = EquipmentReader()
         for (y in 0 until 7) {
             val kitchenLine = input.nextLine()
             kitchenLine.forEachIndexed { x, char ->
-                val equipment = Equipment.get(char)
+                val equipment = equipmentReader.read(char)
                 if (equipment != null) {
                     kitchen.putEquipment(equipment, Position(x, y))
                 }
@@ -127,6 +128,7 @@ value class Input(private val input: Scanner) {
 
 class Kitchen {
     private val equipmentPositions = mutableMapOf<Equipment, Position>()
+    private val itemProviders = mutableMapOf<Item, ItemProvider?>()
 
     fun putEquipment(equipment: Equipment, position: Position) {
         equipmentPositions[equipment] = position
@@ -137,6 +139,14 @@ class Kitchen {
             throw EquipmentNotFoundException(equipment)
         }
         return equipmentPositions[equipment]!!
+    }
+
+    fun getEquipmentThatProvides(item: Item): ItemProvider {
+        return itemProviders.computeIfAbsent(item) {
+            equipmentPositions.keys
+                .filterIsInstance<ItemProvider>()
+                .firstOrNull { itemProvider -> itemProvider.providedItem == item }
+        } ?: throw ItemProviderNotFoundException(item)
     }
 
 }
@@ -204,7 +214,7 @@ class Customer(
     val item: Item,
     /** award intrinsèque + nombre de tours restants */
     val award: Int
-    ) {
+) {
     override fun toString(): String {
         return "Customer(item = $item, award = $award)"
     }
@@ -266,23 +276,31 @@ abstract class Action(val name: String, val comment: String? = null) {
 
 }
 
-enum class Equipment(val char: Char, val providedItem: Item? = null) {
-    DISHWASHER('D', Item("DISH")),
-    WINDOW('W'),
-    BLUBERRIES_CRATE('B', Item("BLUEBERRIES")),
-    ICE_CREAM_CRATE('I', Item("ICE_CREAM")), ;
-
-    companion object {
-        fun get(char: Char): Equipment? {
-            return Equipment.values().find { equipment -> equipment.char == char }
-        }
-
-        fun getEquipmentThatProvides(item: Item): Equipment {
-            return values().find { equipment -> equipment.providedItem == item }
-                ?: throw ItemProviderNotFoundException(item)
+class EquipmentReader {
+    fun read(char: Char): Equipment? {
+        return when (char) {
+            'D' -> Equipment.DISHWASHER
+            'W' -> Equipment.WINDOW
+            'B' -> ItemProvider("BLUBERRIES_CRATE", Item("BLUEBERRIES"))
+            'I' -> ItemProvider("ICE_CREAM_CRATE", Item("ICE_CREAM"))
+            '#', '.' -> null
+            else -> {
+                debug("Unknown equipment char : $char")
+                null
+            }
         }
     }
 }
+
+open class Equipment(val name: String) {
+
+    companion object {
+        val DISHWASHER = ItemProvider("DISHWASHER", Item("DISH"))
+        val WINDOW = Equipment("WINDOW")
+    }
+}
+
+class ItemProvider(name: String, val providedItem: Item) : Equipment(name)
 
 class ItemProviderNotFoundException(val item: Item) : Exception("Cannot find provider for $item")
 
@@ -306,7 +324,7 @@ class PossibleActionResolverV1(gameState: GameState) : PossibleActionResolver(ga
                     if (tableWithItem != null) {
                         return Action.Use(tableWithItem.position, "Got some ${item.name} on table $tableWithItem")
                     }
-                    val equipment = Equipment.getEquipmentThatProvides(item)
+                    val equipment = kitchen.getEquipmentThatProvides(item)
                     val equipmentPosition = kitchen.getPositionOf(equipment)
                     return Action.Use(equipmentPosition, equipment.name)
                 }
@@ -474,7 +492,7 @@ class PossibleActionResolverV2(gameState: GameState) : PossibleActionResolver(ga
             possibleActions += Action.Use(tableWithItem.position, "Got some ${item.name} on table $tableWithItem")
         }
 
-        val equipment = Equipment.getEquipmentThatProvides(item)
+        val equipment = kitchen.getEquipmentThatProvides(item)
         val equipmentPosition = kitchen.getPositionOf(equipment)
         possibleActions += Action.Use(equipmentPosition, equipment.name)
 
