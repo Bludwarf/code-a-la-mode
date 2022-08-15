@@ -34,4 +34,17 @@ internal class InputTest {
         assertThat(gameState.player.position).isEqualTo(Position(1,1))
     }
 
+    @Test
+    fun nextGameStateWithTablesWithItem() {
+        val inputStream = newInputStream(Path.of("ligue1/game-state-with-tables-with-items"))
+        val input = Input(Scanner(inputStream))
+
+        val gameState = input.nextGameState()
+
+        assertThat(gameState.tablesWithItem).containsExactly(
+            Table(Position(1, 6), Item("DISH")),
+            Table(Position(10, 4), Item("DISH-ICE_CREAM")),
+        )
+    }
+
 }

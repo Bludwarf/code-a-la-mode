@@ -151,9 +151,7 @@ fun main() {
     }
 }
 
-class Game(val kitchen: Kitchen) {
-
-}
+class Game(val kitchen: Kitchen)
 
 class GameState(val player: Chef, val tablesWithItem: Tables, val customers: Customers) {
     fun findTableWith(item: Item): Table? {
@@ -185,9 +183,7 @@ value class Input(private val input: Scanner) {
     }
 
     private fun nextTable(): Table {
-        val table = Table(nextPosition())
-        table.item = nextItem()
-        return table
+        return Table(nextPosition(), nextItem())
     }
 
     private fun nextCustomer(): Customer {
@@ -321,9 +317,7 @@ class Chef(override var position: Position) : Positioned {
 
 }
 
-class Table(override var position: Position) : Positioned {
-    var item: Item = Item(NONE)
-}
+data class Table(override val position: Position, val item: Item = Item(NONE)) : Positioned
 
 class Tables : ArrayList<Table>() {
     fun findTableWith(item: Item): Table? {
@@ -336,7 +330,7 @@ class Customer(val item: Item, val award: Int)
 class Customers : ArrayList<Customer>()
 
 interface Positioned {
-    var position: Position
+    val position: Position
 
     fun isNextTo(position: Position): Boolean {
         return this.position.isNextTo(position)
