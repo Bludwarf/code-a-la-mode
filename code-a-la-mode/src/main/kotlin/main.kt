@@ -421,7 +421,66 @@ class PossibleActionResolverV1(gameState: GameState) : PossibleActionResolver(ga
 }
 
 class PossibleActionResolverV2(gameState: GameState) : PossibleActionResolver(gameState) {
+
+    private val kitchen get() = gameState.kitchen
+    private val player get() = gameState.player
+    private val tablesWithItem get() = gameState.tablesWithItem
+
     override fun computeNextPossibleActions(): Set<Action> {
-        return emptySet()
+        return gameState.customers.flatMap { customer -> serve(customer) }.toSet()
+    }
+
+    private fun serve(customer: Customer): Set<Action> {
+        return if (player.item == customer.item) {
+            setOf(Action.Use(kitchen.getPositionOf(Equipment.WINDOW)))
+        } else {
+            val tableWithItem = tablesWithItem.find { table -> table.item == customer.item }
+            if (tableWithItem != null) {
+                setOf(Action.Use(tableWithItem.position, tableWithItem.toString()))
+            } else {
+                prepare(customer.item)
+            }
+        }
+    }
+
+    private fun prepare(item: Item): Set<Action> {
+        debug("player.item.name : ${player.item.name}")
+        debug("item to prepare  : $item")
+
+        if (item.isNone || player.item == item) { // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
+            return emptySet()
+        }
+
+        if (player.needsToDropItemToPrepare(item)) {
+            return dropPlayerItem()
+        }
+
+        if (item.isBase) {
+            return get(item)
+        } else if (player.item != item) { // FIXME on n'est pas obligé de mettre les ingrédients dans l'ordre
+            return prepare(item.withoutLastBaseItem)
+        }
+
+        return emptySet() // TODO dans quel cas on arrive ici ?
+    }
+
+    private fun dropPlayerItem(): Set<Action> {
+        // TODO poser l'item si possible pour gagner du temps
+        return setOf(Action.Use(kitchen.getPositionOf(Equipment.DISHWASHER), "Drop player item"))
+    }
+
+    private fun get(item: Item): Set<Action> {
+        val possibleActions = mutableSetOf<Action>()
+
+        val tableWithItem = gameState.findTableWith(item)
+        if (tableWithItem != null) {
+            possibleActions += Action.Use(tableWithItem.position, "Got some ${item.name} on table $tableWithItem")
+        }
+
+        val equipment = Equipment.getEquipmentThatProvides(item)
+        val equipmentPosition = kitchen.getPositionOf(equipment)
+        possibleActions += Action.Use(equipmentPosition, equipment.name)
+
+        return possibleActions.toSet()
     }
 }
