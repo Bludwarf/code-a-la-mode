@@ -16,12 +16,32 @@ internal class BestActionResolverTest {
     )
     fun resolveBestAction(gameStatePath: String, expectedActionString: String) {
         val gameState = gameState(gameStatePath)
-        val bestActionResolver = BestActionResolver(PossibleActionResolverV2(gameState))
+        val bestActionResolver = BestActionResolver(PossibleActionResolverV2())
 
         val action = bestActionResolver.resolveBestActionFrom(gameState)
 
         val expectedAction = action(expectedActionString)
         assertThat(action).isEqualTo(expectedAction)
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        "ligue2/game-2362403142607370200-state-1.txt, USE 5 0, USE DISHWASHER",
+    )
+    fun resolveBestActionFastEnough(gameStatePath: String, expectedActionString: String) {
+        val currentTimestamp = System.currentTimeMillis()
+
+        val gameState = gameState(gameStatePath)
+        val bestActionResolver = BestActionResolver(PossibleActionResolverV2())
+
+        val action = bestActionResolver.resolveBestActionFrom(gameState)
+
+        val expectedAction = action(expectedActionString)
+        assertThat(action).isEqualTo(expectedAction)
+
+        assertThat(System.currentTimeMillis())
+            .`as`("Maximum response time is <= 1 second")
+            .isLessThanOrEqualTo(currentTimestamp + 1000)
     }
 
 }

@@ -1,7 +1,12 @@
+import java.io.OutputStream
+import java.io.PrintWriter
 import java.util.*
 import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.sqrt
+
+private const val BEST_ACTION_RESOLVER_MAX_STACK_SIZE = 1
+private const val PRINT_GAME_STATE = false
 
 // https://www.codingame.com/ide/puzzle/code-a-la-mode
 /**
@@ -9,17 +14,42 @@ import kotlin.math.sqrt
  * the standard input according to the problem statement.
  **/
 fun main() {
+    debug(System.currentTimeMillis())
     val input = Input(Scanner(System.`in`))
     val game = input.nextGame()
+    val bestActionResolver = BestActionResolver(PossibleActionResolverV2())
+    val writer = Writer(System.err)
 
     // game loop
     while (true) {
         val gameState = input.nextGameState(game)
 
-        val bestActionResolver = BestActionResolver(PossibleActionResolverV2(gameState))
+        val timer = Timer()
+        debug("t0 $timer")
+
+        if (PRINT_GAME_STATE) {
+            System.err.print("GameState : ")
+            writer.write(gameState)
+            writer.flush()
+            System.err.println()
+        }
+
+        debug("t1 $timer")
+
         val action = bestActionResolver.resolveBestActionFrom(gameState)
 
+        debug("t2 $timer")
+
         println(action)
+    }
+}
+
+data class Timer(var t0: Long = System.currentTimeMillis()) {
+    override fun toString(): String {
+        val t1 = System.currentTimeMillis()
+        val interval = t1 - t0
+        t0 = System.currentTimeMillis()
+        return interval.toString()
     }
 }
 
@@ -27,6 +57,7 @@ class Game(val kitchen: Kitchen)
 
 data class GameState(
     private val game: Game,
+    val turnsRemaining: Int,
     val player: Chef,
     val partner: Chef,
     val tablesWithItem: List<Table>,
@@ -38,7 +69,7 @@ data class GameState(
     }
 
     fun getTableAt(position: Position): Table? {
-        return tablesWithItem.firstOrNull() { table -> table.position == position }
+        return tablesWithItem.firstOrNull { table -> table.position == position }
     }
 
     fun isEmpty(position: Position): Boolean {
@@ -49,10 +80,8 @@ data class GameState(
         get() = game.kitchen
 }
 
-class CustomerActionsWithAward(val customer: Customer, val award: Int)
-
-fun debug(message: String) {
-    System.err.println(message)
+fun debug(message: Any) {
+    System.err.println(message.toString())
 }
 
 @JvmInline
@@ -83,7 +112,6 @@ value class Input(private val input: Scanner) {
         val numTablesWithItems = input.nextInt() // the number of tables in the kitchen that currently hold an item
         for (i in 0 until numTablesWithItems) {
             val table = nextTable()
-            System.err.println("table : $table")
             tables.add(table)
         }
         return tables.toList()
@@ -94,7 +122,6 @@ value class Input(private val input: Scanner) {
         val numCustomers = input.nextInt() // the number of customers currently waiting for food
         for (i in 0 until numCustomers) {
             val customer = nextCustomer()
-            System.err.println("customer : $customer")
             customers.add(customer)
         }
         return customers.toList()
@@ -136,14 +163,14 @@ value class Input(private val input: Scanner) {
     }
 
     fun nextGameState(game: Game): GameState {
-        @Suppress("UNUSED_VARIABLE") val turnsRemaining = input.nextInt()
+        val turnsRemaining = input.nextInt()
         val player = nextChef()
         val partner = nextChef()
         val tablesWithItem = readTablesWithItem()
         @Suppress("UNUSED_VARIABLE") val ovenContents = input.next() // ignore until wood 1 league
         @Suppress("UNUSED_VARIABLE") val ovenTimer = input.nextInt()
         val customers = nextCustomers()
-        return GameState(game, player, partner, tablesWithItem, customers)
+        return GameState(game, turnsRemaining, player, partner, tablesWithItem, customers)
     }
 
     internal fun nextAction(): Action {
@@ -174,6 +201,14 @@ data class Kitchen(
                 .filterIsInstance<ItemProvider>()
                 .firstOrNull { itemProvider -> itemProvider.providedItem == item }
         } ?: throw ItemProviderNotFoundException(item)
+    }
+
+    fun getEquipmentThatProvidesOrNull(item: Item): ItemProvider? {
+        return itemProviders.computeIfAbsent(item) {
+            equipmentPositions.keys
+                .filterIsInstance<ItemProvider>()
+                .firstOrNull { itemProvider -> itemProvider.providedItem == item }
+        }
     }
 
     fun isEmpty(position: Position): Boolean {
@@ -257,7 +292,7 @@ data class Item(val name: String) {
                 .map { namePart -> if (namePart == name) this else Item(namePart) }
                 .toList()
         )
-    val isNone get() = this == NONE
+    val isNone get() = this == NONE // TODO remplacer plutôt par un null et mettre item en Item?
     val withoutLastBaseItem: Item
         get() {
             val newName = name.substringBeforeLast("-")
@@ -274,6 +309,8 @@ data class Item(val name: String) {
         val DISH = Item("DISH")
         val ICE_CREAM = Item("ICE_CREAM")
         val BLUEBERRIES = Item("BLUEBERRIES")
+        val STRAWBERRIES = Item("STRAWBERRIES")
+        val CHOPPED_STRAWBERRIES = Item("CHOPPED_" + STRAWBERRIES.name)
     }
 
 }
@@ -381,9 +418,11 @@ class EquipmentReader {
     fun read(char: Char): Equipment? {
         return when (char) {
             'D' -> Equipment.DISHWASHER
+            'C' -> Equipment.CHOPPING_BOARD
             'W' -> Equipment.WINDOW
-            'B' -> ItemProvider("BLUEBERRIES_CRATE", Item.BLUEBERRIES)
-            'I' -> ItemProvider("ICE_CREAM_CRATE", Item.ICE_CREAM)
+            'B' -> ItemProvider(Item.BLUEBERRIES)
+            'I' -> ItemProvider(Item.ICE_CREAM)
+            'S' -> ItemProvider(Item.STRAWBERRIES)
             '#', '.' -> null
             else -> {
                 debug("Unknown equipment char : $char")
@@ -396,237 +435,168 @@ class EquipmentReader {
 open class Equipment(val name: String) {
 
     companion object {
-        val DISHWASHER = ItemProvider("DISHWASHER", Item.DISH)
+        val DISHWASHER = ItemProvider(Item.DISH, "DISHWASHER")
         val WINDOW = Equipment("WINDOW")
+        val CHOPPING_BOARD = Equipment("CHOPPING_BOARD")
     }
 }
 
-class ItemProvider(name: String, val providedItem: Item) : Equipment(name)
+class ItemProvider(val providedItem: Item, name: String = providedItem.name + "_CRATE") : Equipment(name)
 
 class ItemProviderNotFoundException(val item: Item) : Exception("Cannot find provider for $item")
 
-abstract class PossibleActionResolver(val gameState: GameState) {
-    abstract fun computeNextPossibleActions(): Set<Action>
+abstract class PossibleActionResolver() {
+    abstract fun computeNextPossibleActions(gameState: GameState): Set<Action>
 }
 
-class PossibleActionResolverV1(gameState: GameState) : PossibleActionResolver(gameState) {
-    override fun computeNextPossibleActions(): Set<Action> {
-        return setOf(
-            try {
-                val kitchen = gameState.kitchen
-                val player = gameState.player
-                val tables = gameState.tablesWithItem
-                val customers = gameState.customers
+class PossibleActionResolverV2() : PossibleActionResolver() {
 
-                val useWindow = Action.Use(kitchen.getPositionOf(Equipment.WINDOW))
+    override fun computeNextPossibleActions(gameState: GameState): Set<Action> {
+        val resolver = ResolverForOneGameState(gameState)
+        return resolver.computeNextPossibleActions()
+    }
 
-                fun get(item: Item): Action {
-                    val tableWithItem = gameState.findTableWith(item)
+    private class ResolverForOneGameState(val gameState: GameState) {
+        private val kitchen get() = gameState.kitchen
+        private val player get() = gameState.player
+        private val tablesWithItem get() = gameState.tablesWithItem
+
+        fun computeNextPossibleActions(): Set<Action> {
+            val resolver = ResolverForOneGameState(gameState)
+            return gameState.customers.flatMap { customer -> resolver.serve(customer) }.toSet()
+        }
+
+        private fun serve(customer: Customer): Set<Action> {
+            return try {
+                if (player.item == customer.item) {
+                    setOf(Action.Use(kitchen.getPositionOf(Equipment.WINDOW)))
+                } else {
+                    val tableWithItem = tablesWithItem.find { table -> table.item == customer.item }
                     if (tableWithItem != null) {
-                        return Action.Use(tableWithItem.position, "Got some ${item.name} on table $tableWithItem")
-                    }
-                    val equipment = kitchen.getEquipmentThatProvides(item)
-                    val equipmentPosition = kitchen.getPositionOf(equipment)
-                    return Action.Use(equipmentPosition, equipment.name)
-                }
-
-                fun dropPlayerItem(): Action {
-                    return Action.Use(kitchen.getPositionOf(Equipment.DISHWASHER), "Drop player item")
-                }
-
-                fun prepare(item: Item): List<Action> {
-
-                    if (item.isNone || player.item == item) {
-                        return emptyList()
-                    }
-
-                    val actions = mutableListOf<Action>()
-
-                    if (player.needsToDropItemToPrepare(item)) {
-                        actions += dropPlayerItem()
-                    }
-
-                    if (item.isBase) {
-                        actions += get(item)
-                    } else if (player.item != item) {
-                        actions += prepare(item.withoutLastBaseItem)
-                        actions += get(item.baseItems.last())
-                    }
-
-                    return actions.toList()
-                }
-
-                fun actionsToServe(customer: Customer): List<Action> {
-
-                    val actions = mutableListOf<Action>()
-
-                    if (player.item != customer.item) {
-
-                        // Le plat existe déjà sur une table ?
-                        val tableWithItem = tables.find { table -> table.item == customer.item }
-                        if (tableWithItem != null) {
-                            actions += Action.Use(tableWithItem.position, tableWithItem.toString())
-                        } else {
-                            actions += prepare(customer.item)
-                        }
-
-                    }
-
-                    actions += useWindow
-
-                    return actions.toList()
-                }
-
-                val actionsByCustomer = mutableMapOf<Customer, List<Action>>()
-                var firstException: Exception? = null
-                for (customer in customers) {
-                    try {
-                        val actions = actionsToServe(customer)
-                        actionsByCustomer[customer] = actions
-                    } catch (e: Exception) {
-                        debug("Cannot serve $customer because of error : ${e.message}")
-                        firstException = e
+                        setOf(Action.Use(tableWithItem.position, tableWithItem.toString()))
+                    } else {
+                        prepare(customer.item)
                     }
                 }
-
-                if (actionsByCustomer.isEmpty() && firstException != null) {
-                    throw firstException
-                }
-
-                fun costOf(action: Action): Int {
-                    if (action is Action.Use) {
-                        return if (player.isNextTo(action.position)) {
-                            1
-                        } else {
-                            2 // TODO compute cost to go from player position to action.position
-                        }
-                    }
-                    return 1
-                }
-
-                fun costOf(actions: List<Action>): Int {
-                    return actions.sumOf { action -> costOf(action) }
-                }
-
-                fun chooseCustomerWithMaxAward(actionsByCustomer: MutableMap<Customer, List<Action>>): Customer {
-                    return actionsByCustomer
-                        .map { (customer, actions) ->
-                            val actionsAward = customer.award - costOf(actions)
-                            CustomerActionsWithAward(customer, actionsAward)
-                        }
-                        .maxByOrNull(CustomerActionsWithAward::award)!!
-                        .customer
-                }
-
-
-                if (actionsByCustomer.isEmpty()) {
-                    Action.Wait("Cannot serve any customer")
-                } else {
-                    val bestValuableCustomer = chooseCustomerWithMaxAward(actionsByCustomer)
-                    val actions = actionsByCustomer[bestValuableCustomer]!!
-
-                    actions.firstOrNull() ?: Action.Wait("No action to perform")
-                }
-
-            } catch (e: ItemProviderNotFoundException) {
-                Action.Wait(comment = e.item.name + "?!")
             } catch (e: Exception) {
-                debug("ERROR : ${e.message}")
-                Action.Wait(comment = e.message)
+                setOf(Action.Wait(e.message))
             }
-        )
-    }
-}
+        }
 
-class PossibleActionResolverV2(gameState: GameState) : PossibleActionResolver(gameState) {
-
-    private val kitchen get() = gameState.kitchen
-    private val player get() = gameState.player
-    private val tablesWithItem get() = gameState.tablesWithItem
-
-    override fun computeNextPossibleActions(): Set<Action> {
-        return gameState.customers.flatMap { customer -> serve(customer) }.toSet()
-    }
-
-    private fun serve(customer: Customer): Set<Action> {
-        return try {
-            if (player.item == customer.item) {
-                setOf(Action.Use(kitchen.getPositionOf(Equipment.WINDOW)))
+        private fun prepare(item: Item): Set<Action> {
+            return if (item.isNone || player.item == item) {
+                emptySet()
+            } else if (item.isBase) {
+                getBaseItem(item)
+            } else if (player.needsToDropItemToPrepare(item)) {
+                dropPlayerItem()
             } else {
-                val tableWithItem = tablesWithItem.find { table -> table.item == customer.item }
-                if (tableWithItem != null) {
-                    setOf(Action.Use(tableWithItem.position, tableWithItem.toString()))
-                } else {
-                    prepare(customer.item)
-                }
+                val playerBaseItems = player.item.baseItems
+                (item.baseItems - playerBaseItems)
+                    .flatMap { baseItem -> prepare(baseItem) }
+                    .toSet()
             }
-        } catch (e: Exception) {
-            setOf(Action.Wait(e.message))
-        }
-    }
-
-    private fun prepare(item: Item): Set<Action> {
-        return if (item.isNone || player.item == item) {
-            emptySet()
-        } else if (item.isBase) {
-            get(item)
-        } else if (player.needsToDropItemToPrepare(item)) {
-            dropPlayerItem()
-        } else {
-            val playerBaseItems = player.item.baseItems
-            (item.baseItems - playerBaseItems)
-                .flatMap { baseItem -> prepare(baseItem) }
-                .toSet()
-        }
-    }
-
-    private fun dropPlayerItem(): Set<Action> {
-        // TODO poser l'item si possible pour gagner du temps
-        return setOf(Action.Use(kitchen.getPositionOf(Equipment.DISHWASHER), "Drop player item"))
-    }
-
-    private fun get(item: Item): Set<Action> {
-
-        val possibleActions = mutableSetOf<Action>()
-
-        val tableWithItem = gameState.findTableWith(item)
-        if (tableWithItem != null) {
-            possibleActions += Action.Use(tableWithItem.position, "Got some ${item.name} on table $tableWithItem")
         }
 
-        try {
-            val equipment = kitchen.getEquipmentThatProvides(item)
-            val equipmentPosition = kitchen.getPositionOf(equipment)
-            possibleActions += Action.Use(equipmentPosition, equipment.name)
-        } catch (e: ItemProviderNotFoundException) {
-            possibleActions += setOf(Action.Wait(e.message)) // on attend que quelqu'un d'autre prépare le baseItem
+        private fun dropPlayerItem(): Set<Action> {
+            // TODO poser l'item si possible pour gagner du temps
+            return setOf(Action.Use(kitchen.getPositionOf(Equipment.DISHWASHER), "Drop player item"))
         }
 
-        return possibleActions.toSet()
+        private fun getBaseItem(item: Item): Set<Action> {
 
+            val possibleActions = mutableSetOf<Action>()
+
+            val tableWithItem = gameState.findTableWith(item)
+            if (tableWithItem != null) {
+                possibleActions += Action.Use(tableWithItem.position, "Got some ${item.name} on table $tableWithItem")
+            }
+
+            val equipment = kitchen.getEquipmentThatProvidesOrNull(item)
+            if (equipment != null) {
+                val equipmentPosition = kitchen.getPositionOf(equipment)
+                possibleActions += Action.Use(equipmentPosition, equipment.name)
+            } else {
+                possibleActions += prepareBaseItem(item)
+            }
+
+            return possibleActions.toSet()
+
+        }
+
+        private fun prepareBaseItem(item: Item): Set<Action> {
+            return if (item == Item.CHOPPED_STRAWBERRIES) {
+                if (gameState.player.item.isNone) {
+                    getBaseItem(Item.STRAWBERRIES)
+                } else if (gameState.player.item == Item.STRAWBERRIES) {
+                    setOf(Action.Use(gameState.kitchen.getPositionOf(Equipment.CHOPPING_BOARD), "Chopping..."))
+                } else {
+                    dropPlayerItem()
+                }
+            } else {
+                setOf(Action.Wait("W4 ${item.name}")) // on attend que quelqu'un d'autre prépare le baseItem
+            }
+        }
     }
 }
 
 class BestActionResolver(private val possibleActionResolver: PossibleActionResolver) {
     private val simulator = Simulator()
+    private val bestActionsByGameState = mutableMapOf<GameState, Action>()
 
-    fun resolveBestActionFrom(gameState: GameState): Action {
-        val nextPossibleActions = possibleActionResolver.computeNextPossibleActions()
+    fun resolveBestActionFrom(gameState: GameState, stackSize: Int = 0): Action {
+        debug("resolveBestActionFrom $gameState")
+        if (bestActionsByGameState.containsKey(gameState)) {
+            return bestActionsByGameState[gameState]!!
+        }
+        val nextPossibleActions = possibleActionResolver.computeNextPossibleActions(gameState)
         val defaultAction = Action.Wait()
 
-        return if (nextPossibleActions.isEmpty()) {
+        val bestAction = if (nextPossibleActions.isEmpty()) {
             defaultAction
         } else if (nextPossibleActions.size == 1) {
             nextPossibleActions.first()
         } else {
-            nextPossibleActions.maxByOrNull { action -> computeAwardOf(action, gameState) } ?: defaultAction
+            nextPossibleActions.maxByOrNull { action -> computeAwardOf(action, gameState, stackSize) } ?: defaultAction
         }
+
+        bestActionsByGameState[gameState] = bestAction
+        return bestAction
     }
 
-    private fun computeAwardOf(action: Action, gameStateBeforeAction: GameState): Int {
+    /**
+     * Pour des raisons de perfs, on arrête le calcul le plus tôt possible
+     */
+    private fun computeAwardOf(action: Action, gameStateBeforeAction: GameState, stackSize: Int): Int {
+        // Pour des raisons de perfs, on considère certaines actions comme sans valeur
+        if (hasAlmostNoValue(action, gameStateBeforeAction)) {
+            // Drop DISH
+            return 0
+        }
+
         val gameStateAfterAction = simulator.simulate(gameStateBeforeAction, action)
-        return gameStateAfterAction.playerScore - gameStateBeforeAction.playerScore
+        val actionOnlyAward = gameStateAfterAction.playerScore - gameStateBeforeAction.playerScore
+        if (actionOnlyAward > 0) {
+            return actionOnlyAward
+        }
+
+        val nextBestActionAward = if (actionsAreStillPossible(gameStateAfterAction, stackSize)) {
+//            debug("gameStateAfterAction.turnsRemaining : ${gameStateAfterAction.turnsRemaining}")
+            val nextBestAction = resolveBestActionFrom(gameStateAfterAction, stackSize + 1)
+            computeAwardOf(nextBestAction, gameStateAfterAction, stackSize)
+        } else {
+            0
+        }
+
+        return actionOnlyAward + nextBestActionAward
     }
+
+    private fun hasAlmostNoValue(action: Action, gameStateBeforeAction: GameState) =
+        action is Action.Wait ||
+                action is Action.Use && gameStateBeforeAction.kitchen.getEquipmentAt(action.position) == Equipment.DISHWASHER && !gameStateBeforeAction.player.item.isNone
+
+    private fun actionsAreStillPossible(gameStateAfterAction: GameState, stackSize: Int) =
+        gameStateAfterAction.turnsRemaining > 0 && stackSize < BEST_ACTION_RESOLVER_MAX_STACK_SIZE
 
 }
 
@@ -639,6 +609,10 @@ class Simulator {
 
             is Action.Move -> {
                 simulate(gameState, action)
+            }
+
+            is Action.Wait -> {
+                wait(gameState)
             }
 
             else -> {
@@ -660,6 +634,8 @@ class Simulator {
             if (equipment != null) {
                 if (equipment == Equipment.DISHWASHER) {
                     return simulateUseDishwasher(gameState)
+                } else if (equipment == Equipment.CHOPPING_BOARD) {
+                    return simulateUseChoppingBoard(gameState)
                 } else if (equipment == Equipment.WINDOW) {
                     return simulateUseWindow(gameState)
                 } else if (equipment is ItemProvider) {
@@ -677,6 +653,7 @@ class Simulator {
     private fun simulateUse(table: Table, gameState: GameState): GameState {
         val player = gameState.player
         return gameState.copy(
+            turnsRemaining = gameState.turnsRemaining - 1,
             tablesWithItem = gameState.tablesWithItem - table,
             player = if (table.item.isNone) player else player.copy(
                 item = player.item.with(table.item)
@@ -699,6 +676,7 @@ class Simulator {
                 gameState
             } else if (player.position.isNextTo(action.position)) {
                 gameState.copy(
+                    turnsRemaining = gameState.turnsRemaining - 1,
                     player = player.copy(
                         position = action.position
                     )
@@ -711,6 +689,7 @@ class Simulator {
                 } else {
                     val nextPlayerPosition = path.subPath(4).lastOrNextOf(action.position)
                     gameState.copy(
+                        turnsRemaining = gameState.turnsRemaining - 1,
                         player = player.copy(
                             position = nextPlayerPosition
                         )
@@ -730,12 +709,26 @@ class Simulator {
         }
     }
 
+    private fun simulateUseChoppingBoard(gameState: GameState): GameState {
+        return if (gameState.player.item == Item.STRAWBERRIES) {
+            gameState.copy(
+                turnsRemaining = gameState.turnsRemaining - 1,
+                player = gameState.player.copy(
+                    item = Item.CHOPPED_STRAWBERRIES
+                ),
+            )
+        } else {
+            gameState
+        }
+    }
+
     private fun simulateUseWindow(gameState: GameState): GameState {
         val player = gameState.player
         val customerThatWantPlayerItem =
             gameState.customers.firstOrNull { customer -> customer.item == player.item }
         return if (customerThatWantPlayerItem != null) {
             gameState.copy(
+                turnsRemaining = gameState.turnsRemaining - 1,
                 player = player.copy(
                     item = Item.NONE
                 ),
@@ -748,7 +741,9 @@ class Simulator {
     }
 
     private fun simulateUse(equipment: ItemProvider, gameState: GameState): GameState {
+        // FIXME on ne peut pas prendre une fraise quand on a une assiette (cf message d'erreur : Bludwarf1: Cannot take Dish(contents=[ICE_CREAM, BLUEBERRIES]) while holding STRAWBERRIES!)
         return gameState.copy(
+            turnsRemaining = gameState.turnsRemaining - 1,
             player = gameState.player.copy(
                 item = gameState.player.item.with(equipment.providedItem)
             )
@@ -758,6 +753,7 @@ class Simulator {
     private fun dropDishToDishwasher(gameState: GameState): GameState {
         // TODO inc dish count
         return gameState.copy(
+            turnsRemaining = gameState.turnsRemaining - 1,
             player = gameState.player.copy(
                 item = Item.NONE
             )
@@ -767,9 +763,16 @@ class Simulator {
     private fun grabDishFromDishwasher(gameState: GameState): GameState {
         // TODO dec dish count
         return gameState.copy(
+            turnsRemaining = gameState.turnsRemaining - 1,
             player = gameState.player.copy(
                 item = Item.DISH
             )
+        )
+    }
+
+    private fun wait(gameState: GameState): GameState {
+        return gameState.copy(
+            turnsRemaining = gameState.turnsRemaining - 1,
         )
     }
 
@@ -841,5 +844,68 @@ data class Path(val positions: List<Position>) : List<Position> by positions {
 
     fun lastOrNextOf(targetPosition: Position): Position {
         return positions.firstOrNull { position -> position.isNextTo(targetPosition) } ?: positions.last()
+    }
+}
+
+internal class Writer(`out`: OutputStream) : AutoCloseable {
+    private val out = PrintWriter(out)
+    private var empty = true
+
+    fun write(gameState: GameState) {
+        write(gameState.turnsRemaining)
+        write(gameState.player)
+        write(gameState.partner)
+
+        write(gameState.tablesWithItem.size)
+        gameState.tablesWithItem.forEach { write(it) }
+
+        write("NONE") // TODO ovenContents
+        write("0") // TODO ovenTimer
+
+        write(gameState.customers.size)
+        gameState.customers.forEach { write(it) }
+    }
+
+    private fun write(chef: Chef) {
+        write(chef.position)
+        write(chef.item)
+    }
+
+    private fun write(position: Position) {
+        write(position.x, position.y)
+    }
+
+    private fun write(item: Item) {
+        write(item.name)
+    }
+
+    private fun write(vararg values: Any) {
+        for (value in values) {
+            write(value)
+        }
+    }
+
+    private fun write(table: Table) {
+        write(table.position)
+        write(table.item)
+    }
+
+    private fun write(customer: Customer) {
+        write(customer.item)
+        write(customer.award)
+    }
+
+    private fun write(value: Any) {
+        if (!empty) out.write(" ")
+        out.write(value.toString())
+        if (empty) empty = false
+    }
+
+    override fun close() {
+        out.close()
+    }
+
+    fun flush() {
+        out.flush()
     }
 }
