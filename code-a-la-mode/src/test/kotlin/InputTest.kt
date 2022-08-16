@@ -19,8 +19,8 @@ internal class InputTest {
 
         val kitchen = game.kitchen
         assertThat(kitchen.getPositionOf(Equipment.DISHWASHER)).isEqualTo(Position(5, 0))
-        assertThat(kitchen.getPositionOf(kitchen.getEquipmentThatProvides(ICE_CREAM))).isEqualTo(Position(0, 1))
-        assertThat(kitchen.getPositionOf(kitchen.getEquipmentThatProvides(BLUEBERRIES))).isEqualTo(Position(5, 4))
+        assertThat(kitchen.getPositionOf(kitchen.requireEquipmentThatProvides(ICE_CREAM))).isEqualTo(Position(0, 1))
+        assertThat(kitchen.getPositionOf(kitchen.requireEquipmentThatProvides(BLUEBERRIES))).isEqualTo(Position(5, 4))
         assertThat(kitchen.getPositionOf(Equipment.WINDOW)).isEqualTo(Position(5, 6))
     }
 
