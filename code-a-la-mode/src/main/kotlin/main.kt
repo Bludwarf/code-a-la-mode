@@ -176,11 +176,12 @@ value class Input(private val input: Scanner) {
     }
 
     internal fun nextAction(): Action {
-        val actionName = input.next()
-        if (actionName == "USE") {
-            return Action.Use(nextPosition())
+        return when (val actionName = input.next()) {
+            "USE" -> Action.Use(nextPosition())
+            "MOVE" -> Action.Move(nextPosition())
+            "WAIT" -> Action.Wait()
+            else -> throw NotImplementedError("Unknown action $actionName")
         }
-        TODO("nextAction for $actionName")
     }
 }
 
