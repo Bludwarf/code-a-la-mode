@@ -22,6 +22,7 @@ fun main() {
     // game loop
     while (true) {
         val gameState = input.nextGameState(game)
+        val timer = Timer()
 
         if (PRINT_GAME_STATE) {
             System.err.print("GameState : ")
@@ -36,6 +37,7 @@ fun main() {
             Action.Wait(e.message)
         }
 
+        debug("Δt = $timer")
         println(action)
     }
 }
@@ -451,22 +453,41 @@ class BestActionResolver {
         private val useWindow = use(Equipment.WINDOW)
 
         fun nextActionsFrom(gameState: GameState): List<Action> {
-            // TODO refaire comme avant : une map de customer,actions pour sélectionner le meilleur client en fonction du gain des actions mais aussi en fonction des exceptions (pour ne pas rester bloquer sur un client qui génère une exception)
-            when (val playerItem = gameState.player.item) {
+            return when (val playerItem = gameState.player.item) {
                 null -> {
-                    val bestCustomer =
-                        customers.maxByOrNull { customer -> customer.award } ?: return listOf(Action.Wait("No customers"))
-                    return serve(bestCustomer)
+                    actionsToServeBestCustomer(customers, Action.Wait("No customers"))
                 }
+
                 Item.STRAWBERRIES -> {
-                    return listOf(use(Equipment.CHOPPING_BOARD))
+                    listOf(use(Equipment.CHOPPING_BOARD))
                 }
+
                 else -> {
                     val compatibleCustomers = customers.filter { customer -> customer.item.contains(playerItem) }
-                    val bestCustomer = compatibleCustomers.maxByOrNull { customer -> customer.award } ?: return listOf(dropPlayerItem())
-                    return serve(bestCustomer)
+                    actionsToServeBestCustomer(compatibleCustomers, dropPlayerItem())
                 }
             }
+        }
+
+        private fun actionsToServeBestCustomer(customers: List<Customer>, fallbackAction: Action): List<Action> {
+            val actionsToServerBestCustomer = customers
+                .mapNotNull { customer ->
+                    try {
+                        ActionsToServeCustomer(serve(customer), customer)
+                    } catch (e: Throwable) {
+                        null
+                    }
+                }
+                .maxByOrNull(::estimateAward)
+                ?: return listOf(fallbackAction)
+            return actionsToServerBestCustomer.actions
+        }
+
+        private data class ActionsToServeCustomer(val actions: List<Action>, val customer: Customer)
+
+        fun estimateAward(actionsToServeCustomer: ActionsToServeCustomer): Int {
+            // TODO
+            return actionsToServeCustomer.customer.award
         }
 
         fun serve(customer: Customer): List<Action> {
@@ -700,7 +721,9 @@ class Simulator {
         return gameState.copy(
             turnsRemaining = gameState.turnsRemaining - 1,
             player = gameState.player.copy(
-                item = if (gameState.player.item == null) equipment.providedItem else gameState.player.item.with(equipment.providedItem)
+                item = if (gameState.player.item == null) equipment.providedItem else gameState.player.item.with(
+                    equipment.providedItem
+                )
             )
         )
     }
