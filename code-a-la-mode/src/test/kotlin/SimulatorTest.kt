@@ -16,11 +16,11 @@ internal class SimulatorTest {
 
         val gameState2 = simulator.simulate(gameState1, Action.Use(Position(5, 0)))
         assertThat(gameState2.player.position).isEqualTo(Position(3, 1))
-        assertThat(gameState2.player.item).isEqualTo(Item.NONE)
+        assertThat(gameState2.player.item).isNull()
 
         val gameState3 = simulator.simulate(gameState2, Action.Use(Position(5, 0)))
         assertThat(gameState3.player.position).isEqualTo(Position(4, 1))
-        assertThat(gameState3.player.item).isEqualTo(Item.NONE)
+        assertThat(gameState3.player.item).isNull()
 
         val gameState4 = simulator.simulate(gameState3, Action.Use(Position(5, 0)))
         assertThat(gameState4.player.position).isEqualTo(Position(4, 1))
@@ -61,7 +61,7 @@ internal class SimulatorTest {
         val action = Action.Use(gameState23.kitchen.getPositionOf(Equipment.WINDOW))
 
         val gameState24 = simulator.simulate(gameState23, action)
-        assertThat(gameState24.player.item).isEqualTo(NONE)
+        assertThat(gameState24.player.item).isNull()
         assertThat(gameState24.player.position).isEqualTo(gameState23.player.position)
         assertThat(gameState24.customers).hasSize(gameState23.customers.size - 1)
 

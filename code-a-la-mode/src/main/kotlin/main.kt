@@ -1,4 +1,3 @@
-
 import java.io.OutputStream
 import java.io.PrintWriter
 import java.util.*
@@ -93,8 +92,13 @@ value class Input(private val input: Scanner) {
         return Position(input.nextInt(), input.nextInt())
     }
 
-    private fun nextItem(): Item {
-        return Item(input.next())
+    private fun nextItem(): Item? {
+        val name = input.next()
+        return if (name == Item.NONE.name) {
+            null
+        } else {
+            Item(name)
+        }
     }
 
     private fun nextChef(): Chef {
@@ -102,11 +106,11 @@ value class Input(private val input: Scanner) {
     }
 
     private fun nextTable(): Table {
-        return Table(nextPosition(), nextItem())
+        return Table(nextPosition(), nextItem()!!)
     }
 
     private fun nextCustomer(): Customer {
-        return Customer(nextItem(), input.nextInt())
+        return Customer(nextItem()!!, input.nextInt())
     }
 
     private fun readTablesWithItem(): List<Table> {
@@ -291,16 +295,10 @@ data class Item(val name: String) {
 
     val baseItems: Items
         get() = Items(
-            if (isNone) {
-                emptyList()
-            } else {
-                name.split("-")
-                    .map { namePart -> if (namePart == name) this else Item(namePart) }
-                    .toList()
-            }
+            name.split("-")
+                .map { namePart -> if (namePart == name) this else Item(namePart) }
+                .toList()
         )
-    val isNone get() = this == NONE // TODO remplacer plutôt par un null et mettre item en Item?
-
     val isBase get() = !name.contains("-")
 
     companion object {
@@ -316,9 +314,9 @@ data class Item(val name: String) {
 
 class Items(private val value: List<Item>) : List<Item> by value
 
-data class Chef(override var position: Position, val item: Item = Item.NONE) : Positioned
+data class Chef(override var position: Position, val item: Item?) : Positioned
 
-data class Table(override val position: Position, val item: Item = Item.NONE) : Positioned
+data class Table(override val position: Position, val item: Item) : Positioned
 
 class Customer(
     val item: Item,
@@ -453,17 +451,20 @@ class BestActionResolver {
         private val useWindow = use(Equipment.WINDOW)
 
         fun nextActionsFrom(gameState: GameState): List<Action> {
-            val playerItem = gameState.player.item
-            if (playerItem.isNone) {
-                val bestCustomer =
-                    customers.maxByOrNull { customer -> customer.award } ?: return listOf(Action.Wait("No customers"))
-                return serve(bestCustomer)
-            } else if (playerItem == Item.STRAWBERRIES) {
-                return listOf(use(Equipment.CHOPPING_BOARD))
-            } else {
-                val compatibleCustomers = customers.filter { customer -> customer.item.contains(playerItem) }
-                val bestCustomer = compatibleCustomers.maxByOrNull { customer -> customer.award } !!
-                return serve(bestCustomer)
+            when (val playerItem = gameState.player.item) {
+                null -> {
+                    val bestCustomer =
+                        customers.maxByOrNull { customer -> customer.award } ?: return listOf(Action.Wait("No customers"))
+                    return serve(bestCustomer)
+                }
+                Item.STRAWBERRIES -> {
+                    return listOf(use(Equipment.CHOPPING_BOARD))
+                }
+                else -> {
+                    val compatibleCustomers = customers.filter { customer -> customer.item.contains(playerItem) }
+                    val bestCustomer = compatibleCustomers.maxByOrNull { customer -> customer.award }!!
+                    return serve(bestCustomer)
+                }
             }
         }
 
@@ -489,16 +490,16 @@ class BestActionResolver {
         }
 
         fun assemble(item: Item): List<Action> {
-            debug("player.item.name : ${player.item.name}")
+            debug("player.item.name : ${player.item?.name}")
             debug("item to prepare  : $item")
 
-            if (item.isNone || player.item == item) {
+            if (player.item == item) {
                 return emptyList()
             }
 
-            val playerBaseItems = player.item.baseItems
+            val playerBaseItems = player.item?.baseItems ?: emptyList()
 
-            val missingBaseItems = (item.baseItems - playerBaseItems)
+            val missingBaseItems = (item.baseItems - playerBaseItems.toSet())
             val getActions = missingBaseItems.flatMap { baseItem -> get(baseItem) }
 
             val missingBaseItemsToPrepare = missingBaseItems.filter { baseItem -> !gameState.contains(baseItem) }
@@ -529,7 +530,7 @@ class BestActionResolver {
         private fun prepare(item: Item): List<Action> {
             val actions = mutableListOf<Action>()
 
-            if (!player.item.isNone) {
+            if (player.item != null) {
                 actions += dropPlayerItem()
             }
 
@@ -608,7 +609,7 @@ class Simulator {
         return gameState.copy(
             turnsRemaining = gameState.turnsRemaining - 1,
             tablesWithItem = gameState.tablesWithItem - table,
-            player = if (table.item.isNone) player else player.copy(
+            player = if (player.item == null) player else player.copy(
                 item = player.item.with(table.item)
             )
         )
@@ -683,7 +684,7 @@ class Simulator {
             gameState.copy(
                 turnsRemaining = gameState.turnsRemaining - 1,
                 player = player.copy(
-                    item = Item.NONE
+                    item = null
                 ),
                 customers = gameState.customers - customerThatWantPlayerItem,
                 playerScore = gameState.playerScore + customerThatWantPlayerItem.award,
@@ -698,7 +699,7 @@ class Simulator {
         return gameState.copy(
             turnsRemaining = gameState.turnsRemaining - 1,
             player = gameState.player.copy(
-                item = gameState.player.item.with(equipment.providedItem)
+                item = if (gameState.player.item == null) equipment.providedItem else gameState.player.item.with(equipment.providedItem)
             )
         )
     }
@@ -810,7 +811,7 @@ internal class Writer(`out`: OutputStream) : AutoCloseable {
 
     private fun write(chef: Chef) {
         write(chef.position)
-        write(chef.item)
+        write(chef.item ?: Item.NONE)
     }
 
     private fun write(position: Position) {
