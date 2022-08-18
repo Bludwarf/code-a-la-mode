@@ -451,6 +451,7 @@ class BestActionResolver {
         private val useWindow = use(Equipment.WINDOW)
 
         fun nextActionsFrom(gameState: GameState): List<Action> {
+            // TODO refaire comme avant : une map de customer,actions pour sélectionner le meilleur client en fonction du gain des actions mais aussi en fonction des exceptions (pour ne pas rester bloquer sur un client qui génère une exception)
             when (val playerItem = gameState.player.item) {
                 null -> {
                     val bestCustomer =
@@ -462,7 +463,7 @@ class BestActionResolver {
                 }
                 else -> {
                     val compatibleCustomers = customers.filter { customer -> customer.item.contains(playerItem) }
-                    val bestCustomer = compatibleCustomers.maxByOrNull { customer -> customer.award }!!
+                    val bestCustomer = compatibleCustomers.maxByOrNull { customer -> customer.award } ?: return listOf(dropPlayerItem())
                     return serve(bestCustomer)
                 }
             }
