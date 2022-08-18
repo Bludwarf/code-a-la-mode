@@ -717,7 +717,7 @@ class Simulator {
     }
 
     private fun simulateUse(equipment: ItemProvider, gameState: GameState): GameState {
-        // FIXME on ne peut pas prendre une fraise quand on a une assiette (cf message d'erreur : Bludwarf1: Cannot take Dish(contents=[ICE_CREAM, BLUEBERRIES]) while holding STRAWBERRIES!)
+        // FIXME on ne peut pas prendre une fraise quand on a une assiette (cf message d'erreur : bludwarf: Cannot take Dish(contents=[ICE_CREAM, BLUEBERRIES]) while holding STRAWBERRIES!)
         return gameState.copy(
             turnsRemaining = gameState.turnsRemaining - 1,
             player = gameState.player.copy(

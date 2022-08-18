@@ -10,11 +10,11 @@
 #
 # Then, build the image with:
 #
-# docker build -f src/main/docker/Dockerfile.native-micro -t quarkus/bludwarf1 .
+# docker build -f src/main/docker/Dockerfile.native-micro -t quarkus/bludwarf .
 #
 # Then run the container using:
 #
-# docker run -i --rm -p 8080:8080 quarkus/bludwarf1
+# docker run -i --rm -p 8080:8080 quarkus/bludwarf
 #
 ###
 FROM quay.io/quarkus/quarkus-micro-image:1.0

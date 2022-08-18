@@ -10,5 +10,5 @@ pluginManagement {
         id(quarkusPluginId) version quarkusPluginVersion
     }
 }
-rootProject.name ="codingame-bludwarf1"
+rootProject.name ="codingame-bludwarf"
 include("code-a-la-mode")
