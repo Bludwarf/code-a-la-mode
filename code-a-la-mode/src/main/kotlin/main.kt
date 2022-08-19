@@ -565,7 +565,7 @@ class BestActionResolver {
             if (ovenThatContainsCroissant != null) {
                 return when (playerItem) {
                     null -> listOf(use(ovenThatContainsCroissant))
-                    else -> listOf(dropPlayerItem("Drop item to get croissant before it burns!"))
+                    else -> listOf(dropPlayerItem("Drop item to get ${Item.CROISSANT.name} before it burns!"))
                 }
             }
 
@@ -585,6 +585,10 @@ class BestActionResolver {
                     } else {
                         listOf(dropPlayerItem())
                     }
+                }
+
+                Item.CROISSANT -> {
+                    listOf(dropPlayerItem("Drop just baked CROISSANT"))
                 }
 
                 else -> {
@@ -644,7 +648,14 @@ class BestActionResolver {
             val playerBaseItems = player.item?.baseItems ?: emptyList()
 
             val missingBaseItems = (item.baseItems - playerBaseItems.toSet())
-            val getActions = missingBaseItems.flatMap { baseItem -> get(baseItem) }
+            val getActionsWithoutDish = missingBaseItems
+                .filter { it != Item.DISH }
+                .flatMap { baseItem -> get(baseItem) }
+            val getActions = if (missingBaseItems.contains(Item.DISH)) {
+                get(Item.DISH) + getActionsWithoutDish
+            } else {
+                getActionsWithoutDish
+            }
 
             val missingBaseItemsToPrepare = missingBaseItems.filter { baseItem -> !gameState.contains(baseItem) }
             val prepareActions = missingBaseItemsToPrepare.flatMap { baseItem -> prepare(baseItem) }

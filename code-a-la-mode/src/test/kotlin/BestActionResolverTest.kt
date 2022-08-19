@@ -14,7 +14,8 @@ internal class BestActionResolverTest {
         "ligue2/game-2362403142607370200-state-7.txt, USE 5 6, dropPlayerItem",
         "ligue2/game-2362403142607370200-state-45.txt, USE 8 4, \"Got some CHOPPED_STRAWBERRIES on table Table(position=8 4, item=Item(name=CHOPPED_STRAWBERRIES))\"",
         "ligue3/game-7942577706886182900-state-28.txt, USE 9 0, Use STRAWBERRIES_CRATE",
-        "ligue3/game-7942577706886182900-state-88.txt, USE 0 3, Drop item to get croissant before it burns!",
+        "ligue3/game-7942577706886182900-state-88.txt, USE 0 3, Drop item to get CROISSANT before it burns!",
+        "ligue3/game-7942577706886182900-state-193.txt, USE 0 4, Drop just baked CROISSANT",
         quoteCharacter = '"',
     )
     fun resolveBestAction(gameStatePath: String, expectedActionString: String, expectedActionComment: String) {
