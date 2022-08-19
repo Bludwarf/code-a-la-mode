@@ -12,9 +12,9 @@ internal class BestActionResolverTest {
     @CsvSource(
         "ligue2/game-2362403142607370200-state-1.txt, USE 8 3, STRAWBERRIES_CRATE",
         "ligue2/game-2362403142607370200-state-7.txt, USE 5 6, dropPlayerItem",
-        "ligue2/game-2362403142607370200-state-45.txt, USE 8 4, GET CHOPPED_STRAWBERRIES",
+        "ligue2/game-2362403142607370200-state-45.txt, USE 8 4, Got some CHOPPED_STRAWBERRIES on table Table(position=8 4, item=Item(name=CHOPPED_STRAWBERRIES))",
     )
-    fun resolveBestAction(gameStatePath: String, expectedActionString: String) {
+    fun resolveBestAction(gameStatePath: String, expectedActionString: String, expectedActionComment: String) {
         val gameState = gameState(gameStatePath)
         val bestActionResolver = BestActionResolver()
 
@@ -22,6 +22,7 @@ internal class BestActionResolverTest {
 
         val expectedAction = action(expectedActionString)
         assertThat(action).isEqualTo(expectedAction)
+        assertThat(action.comment).isEqualTo(expectedActionComment)
     }
 
     @ParameterizedTest
