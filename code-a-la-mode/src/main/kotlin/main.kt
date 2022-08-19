@@ -5,6 +5,7 @@ import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.sqrt
 
+private const val PRINT_GAME = true
 private const val PRINT_GAME_STATE = false
 
 // https://www.codingame.com/ide/puzzle/code-a-la-mode
@@ -18,6 +19,14 @@ fun main() {
     val game = input.nextGame()
     val bestActionResolver = BestActionResolver()
     val writer = Writer(System.err)
+
+    if (PRINT_GAME) {
+        System.err.print("Game : ")
+        writer.write(game)
+        writer.flush()
+        System.err.println()
+    }
+
 
     // game loop
     while (true) {
@@ -51,7 +60,7 @@ data class Timer(var t0: Long = System.currentTimeMillis()) {
     }
 }
 
-class Game(val kitchen: Kitchen)
+class Game(val kitchen: Kitchen, val customers: List<Customer> = emptyList())
 
 data class GameState(
     private val game: Game,
@@ -155,19 +164,15 @@ value class Input(private val input: Scanner) {
                 }
             }
         }
+        // TODO init chefs spawn positions ("0" | "1")
         return Kitchen(emptyPositions, equipmentPositions)
     }
 
     fun nextGame(): Game {
-        val numAllCustomers = input.nextInt()
-        for (i in 0 until numAllCustomers) {
-            @Suppress("UNUSED_VARIABLE") val customerItem = input.next() // the food the customer is waiting for
-            @Suppress("UNUSED_VARIABLE") val customerAward =
-                input.nextInt() // the number of points awarded for delivering the food
-        }
+        val customers = nextCustomers()
         input.nextLine()
         val kitchen = nextKitchen()
-        return Game(kitchen)
+        return Game(kitchen, customers)
     }
 
     fun nextGameState(game: Game): GameState {
@@ -193,7 +198,7 @@ value class Input(private val input: Scanner) {
 
 data class Kitchen(
     private val emptyPositions: Set<Position> = emptySet(),
-    private val equipmentPositions: Map<Equipment, Position> = emptyMap()
+    private val equipmentPositions: Map<Equipment, Position> = emptyMap(),
 ) {
     private val itemProviders = mutableMapOf<Item, ItemProvider?>()
 
@@ -247,6 +252,7 @@ data class Position(val x: Int, val y: Int) {
     }
 
     companion object {
+        const val MAX_X = 10
         const val MAX_Y = 6
     }
 }
@@ -425,6 +431,23 @@ class EquipmentReader {
     }
 }
 
+class EquipmentWriter {
+    fun write(equipment: Equipment): Char? {
+        return when (equipment) {
+            Equipment.DISHWASHER -> 'D'
+            Equipment.CHOPPING_BOARD -> 'C'
+            Equipment.WINDOW -> 'W'
+            ItemProvider(Item.BLUEBERRIES) -> 'B'
+            ItemProvider(Item.ICE_CREAM) -> 'I'
+            ItemProvider(Item.STRAWBERRIES) -> 'S'
+            else -> {
+                debug("Unknown equipment : $equipment")
+                null
+            }
+        }
+    }
+}
+
 open class Equipment(val name: String) {
 
     companion object {
@@ -434,7 +457,18 @@ open class Equipment(val name: String) {
     }
 }
 
-class ItemProvider(val providedItem: Item, name: String = providedItem.name + "_CRATE") : Equipment(name)
+class ItemProvider(val providedItem: Item, name: String = providedItem.name + "_CRATE") : Equipment(name) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other?.javaClass != javaClass) return false
+        other as ItemProvider
+        return providedItem == other.providedItem
+    }
+
+    override fun hashCode(): Int {
+        return providedItem.hashCode()
+    }
+}
 
 class ItemProviderNotFoundException(item: Item) : Exception("Cannot find provider for $item")
 
@@ -512,9 +546,6 @@ class BestActionResolver {
         }
 
         fun assemble(item: Item): List<Action> {
-            debug("player.item.name : ${player.item?.name}")
-            debug("item to prepare  : $item")
-
             if (player.item == item) {
                 return emptyList()
             }
@@ -787,8 +818,7 @@ class PathFinder(private val gameState: GameState) {
 
         val nextEmptyPositions = mutableSetOf<Position>()
         for (adjacentPosition in adjacentPositions) {
-            // TODO max x
-            if (x >= 0 && y >= 0 && y <= Position.MAX_Y && gameState.isEmpty(adjacentPosition)) {
+            if (x >= 0 && y >= 0 && x <= Position.MAX_X && y <= Position.MAX_Y && gameState.isEmpty(adjacentPosition)) {
                 nextEmptyPositions += adjacentPosition
             }
         }
@@ -816,7 +846,53 @@ data class Path(val positions: List<Position>) : List<Position> by positions {
 
 internal class Writer(`out`: OutputStream) : AutoCloseable {
     private val out = PrintWriter(out)
-    private var empty = true
+    private var currentLineIsEmpty = true
+    private val equipmentWriter = EquipmentWriter()
+
+    companion object {
+        val EMPTY_KITCHEN_LINES = listOf(
+            "###########",
+            "#.........#",
+            "#.####.##.#",
+            "#.#..#..#.#",
+            "#.##.####.#",
+            "#.........#",
+            "###########",
+        )
+    }
+
+    fun write(game: Game) {
+        write(game.customers)
+        newLine()
+        write(game.kitchen)
+    }
+
+    private fun write(kitchen: Kitchen) {
+        for (y in 0 until Position.MAX_Y + 1) {
+            val emptyKitchenLine = EMPTY_KITCHEN_LINES[y]
+            var kitchenLine = ""
+            for (x in 0 until Position.MAX_X + 1) {
+                val position = Position(x, y)
+                val char = charAt(kitchen, position)
+                kitchenLine += char ?: emptyKitchenLine[x]
+            }
+            write(kitchenLine)
+            newLine()
+        }
+    }
+
+    private fun charAt(kitchen: Kitchen, position: Position): Char? {
+        val equipment = kitchen.getEquipmentAt(position)
+        if (equipment != null) {
+            return equipmentWriter.write(equipment)
+        }
+        return null
+    }
+
+    private fun newLine() {
+        out.appendLine()
+        currentLineIsEmpty = true
+    }
 
     fun write(gameState: GameState) {
         write(gameState.turnsRemaining)
@@ -829,8 +905,12 @@ internal class Writer(`out`: OutputStream) : AutoCloseable {
         write("NONE") // TODO ovenContents
         write("0") // TODO ovenTimer
 
-        write(gameState.customers.size)
-        gameState.customers.forEach { write(it) }
+        write(gameState.customers)
+    }
+
+    private fun write(customers: List<Customer>) {
+        write(customers.size)
+        customers.forEach { write(it) }
     }
 
     private fun write(chef: Chef) {
@@ -863,9 +943,9 @@ internal class Writer(`out`: OutputStream) : AutoCloseable {
     }
 
     private fun write(value: Any) {
-        if (!empty) out.write(" ")
+        if (!currentLineIsEmpty) out.write(" ")
         out.write(value.toString())
-        if (empty) empty = false
+        if (currentLineIsEmpty) currentLineIsEmpty = false
     }
 
     override fun close() {
