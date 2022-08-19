@@ -1008,8 +1008,8 @@ internal class Writer(`out`: OutputStream) : AutoCloseable {
         write(position.y)
     }
 
-    private fun write(item: Item) {
-        write(item.name)
+    private fun write(item: Item?) {
+        write(item?.name ?: "NONE")
     }
 
     private fun write(table: Table) {
@@ -1022,7 +1022,11 @@ internal class Writer(`out`: OutputStream) : AutoCloseable {
         write(customer.award)
     }
 
-    private fun write(value: Any?) {
+    private fun write(value: Int) {
+        write(value.toString())
+    }
+
+    private fun write(value: String) {
         if (!currentLineIsEmpty) out.write(" ")
         out.write(value?.toString() ?: "NONE")
         if (currentLineIsEmpty) currentLineIsEmpty = false
