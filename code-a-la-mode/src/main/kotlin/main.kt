@@ -6,7 +6,9 @@ import kotlin.math.pow
 import kotlin.math.sqrt
 
 private const val PRINT_GAME = true
-private const val PRINT_GAME_STATE = false
+private const val PRINT_GAME_STATE = true
+
+val equipmentMapper = EquipmentMapper()
 
 // https://www.codingame.com/ide/puzzle/code-a-la-mode
 /**
@@ -67,9 +69,11 @@ data class GameState(
     val turnsRemaining: Int,
     val player: Chef,
     val partner: Chef,
-    val tablesWithItem: List<Table>,
+    val tablesWithItem: Set<Table>,
     val customers: List<Customer>,
-    val playerScore: Int = 0
+    val playerScore: Int = 0,
+    val ovenContents: Item?,
+    val ovenTimer: Int = 0,
 ) {
     fun findTableWith(item: Item): Table? {
         return tablesWithItem.firstOrNull { table -> table.item == item }
@@ -83,11 +87,34 @@ data class GameState(
         return position != player.position && position != partner.position && kitchen.isEmpty(position)
     }
 
+    private val emptyTables: Set<Table> get() = game.kitchen.tables - tablesWithItem
+
     val kitchen: Kitchen
         get() = game.kitchen
 
     fun contains(item: Item): Boolean {
         return findTableWith(item) != null || kitchen.getEquipmentThatProvides(item) != null
+    }
+
+    fun needsToBePrepared(item: Item): Boolean {
+        return !contains(item)
+    }
+
+    fun getOvenThatContains(item: Item?): Oven? {
+        return if (ovenContents == item) {
+            Equipment.OVEN
+        } else {
+            null
+        }
+    }
+
+    fun getEmptyOven(): Oven? {
+        return getOvenThatContains(null)
+    }
+
+    fun findEmptyTablesNextTo(position: Position): List<Table> {
+        return emptyTables
+            .filter { emptyTable -> emptyTable.isNextTo(position) }
     }
 
 }
@@ -124,14 +151,14 @@ value class Input(private val input: Scanner) {
         return Customer(nextItem()!!, input.nextInt())
     }
 
-    private fun readTablesWithItem(): List<Table> {
-        val tables = mutableListOf<Table>()
+    private fun readTablesWithItem(): Set<Table> {
+        val tables = mutableSetOf<Table>()
         val numTablesWithItems = input.nextInt() // the number of tables in the kitchen that currently hold an item
         for (i in 0 until numTablesWithItems) {
             val table = nextTable()
             tables.add(table)
         }
-        return tables.toList()
+        return tables.toSet()
     }
 
     private fun nextCustomers(): List<Customer> {
@@ -145,9 +172,9 @@ value class Input(private val input: Scanner) {
     }
 
     private fun nextKitchen(): Kitchen {
-        val equipmentReader = EquipmentReader()
 
         val emptyPositions = mutableSetOf<Position>()
+        val tables = mutableSetOf<Table>()
         val equipmentPositions = mutableMapOf<Equipment, Position>()
         for (y in 0 until Position.MAX_Y + 1) {
             val kitchenLine = input.nextLine()
@@ -158,14 +185,18 @@ value class Input(private val input: Scanner) {
                     emptyPositions += position
                 }
 
-                val equipment = equipmentReader.read(char)
+                if (char == '#') {
+                    tables += Table(position)
+                }
+
+                val equipment = equipmentMapper.read(char)
                 if (equipment != null) {
                     equipmentPositions[equipment] = position
                 }
             }
         }
         // TODO init chefs spawn positions ("0" | "1")
-        return Kitchen(emptyPositions, equipmentPositions)
+        return Kitchen(emptyPositions, equipmentPositions, tables)
     }
 
     fun nextGame(): Game {
@@ -180,10 +211,10 @@ value class Input(private val input: Scanner) {
         val player = nextChef()
         val partner = nextChef()
         val tablesWithItem = readTablesWithItem()
-        @Suppress("UNUSED_VARIABLE") val ovenContents = input.next() // ignore until wood 1 league
-        @Suppress("UNUSED_VARIABLE") val ovenTimer = input.nextInt()
+        val ovenContents = nextItem()
+        val ovenTimer = input.nextInt()
         val customers = nextCustomers()
-        return GameState(game, turnsRemaining, player, partner, tablesWithItem, customers)
+        return GameState(game, turnsRemaining, player, partner, tablesWithItem, customers, ovenContents = ovenContents, ovenTimer = ovenTimer)
     }
 
     internal fun nextAction(): Action {
@@ -199,6 +230,7 @@ value class Input(private val input: Scanner) {
 data class Kitchen(
     private val emptyPositions: Set<Position> = emptySet(),
     private val equipmentPositions: Map<Equipment, Position> = emptyMap(),
+    val tables: Set<Table> = emptySet(),
 ) {
     private val itemProviders = mutableMapOf<Item, ItemProvider?>()
 
@@ -249,6 +281,24 @@ data class Position(val x: Int, val y: Int) {
 
     fun distanceWith(position: Position): Double {
         return sqrt(abs(position.x - x).toDouble().pow(2) + abs(position.y - y).toDouble().pow(2))
+    }
+
+    fun adjacentPositions(): Set<Position> {
+        val theoricalAdjacentPositions = listOf(
+            Position(x, y - 1),
+            Position(x - 1, y),
+            Position(x + 1, y),
+            Position(x, y + 1),
+        )
+
+        val validAdjacentPositions = mutableSetOf<Position>()
+        for (adjacentPosition in theoricalAdjacentPositions) {
+            if (x >= 0 && y >= 0 && x <= MAX_X && y <= MAX_Y) {
+                validAdjacentPositions += adjacentPosition
+            }
+        }
+
+        return validAdjacentPositions.toSet()
     }
 
     companion object {
@@ -316,6 +366,8 @@ data class Item(val name: String) {
         val BLUEBERRIES = Item("BLUEBERRIES")
         val STRAWBERRIES = Item("STRAWBERRIES")
         val CHOPPED_STRAWBERRIES = Item("CHOPPED_" + STRAWBERRIES.name)
+        val DOUGH = Item("DOUGH")
+        val CROISSANT = Item("CROISSANT")
     }
 
 }
@@ -324,7 +376,7 @@ class Items(private val value: List<Item>) : List<Item> by value
 
 data class Chef(override var position: Position, val item: Item?) : Positioned
 
-data class Table(override val position: Position, val item: Item) : Positioned
+data class Table(override val position: Position, var item: Item? = null) : Positioned
 
 class Customer(
     val item: Item,
@@ -413,15 +465,17 @@ abstract class Action(val name: String, val comment: String? = null) {
 
 }
 
-class EquipmentReader {
+class EquipmentMapper {
     fun read(char: Char): Equipment? {
         return when (char) {
             'D' -> Equipment.DISHWASHER
             'C' -> Equipment.CHOPPING_BOARD
             'W' -> Equipment.WINDOW
+            'O' -> Equipment.OVEN
             'B' -> ItemProvider(Item.BLUEBERRIES)
             'I' -> ItemProvider(Item.ICE_CREAM)
             'S' -> ItemProvider(Item.STRAWBERRIES)
+            'H' -> ItemProvider(Item.DOUGH)
             '#', '.' -> null
             else -> {
                 debug("Unknown equipment char : $char")
@@ -429,17 +483,17 @@ class EquipmentReader {
             }
         }
     }
-}
 
-class EquipmentWriter {
     fun write(equipment: Equipment): Char? {
         return when (equipment) {
             Equipment.DISHWASHER -> 'D'
             Equipment.CHOPPING_BOARD -> 'C'
             Equipment.WINDOW -> 'W'
+            Equipment.OVEN -> 'O'
             ItemProvider(Item.BLUEBERRIES) -> 'B'
             ItemProvider(Item.ICE_CREAM) -> 'I'
             ItemProvider(Item.STRAWBERRIES) -> 'S'
+            ItemProvider(Item.DOUGH) -> 'H'
             else -> {
                 debug("Unknown equipment : $equipment")
                 null
@@ -454,7 +508,12 @@ open class Equipment(val name: String) {
         val DISHWASHER = ItemProvider(Item.DISH, "DISHWASHER")
         val WINDOW = Equipment("WINDOW")
         val CHOPPING_BOARD = Equipment("CHOPPING_BOARD")
+        val OVEN = Oven()
     }
+}
+
+class Oven: Equipment("OVEN") {
+
 }
 
 class ItemProvider(val providedItem: Item, name: String = providedItem.name + "_CRATE") : Equipment(name) {
@@ -487,13 +546,32 @@ class BestActionResolver {
         private val useWindow = use(Equipment.WINDOW)
 
         fun nextActionsFrom(gameState: GameState): List<Action> {
-            return when (val playerItem = gameState.player.item) {
+            val playerItem = gameState.player.item
+
+            val ovenThatContainsCroissant = gameState.getOvenThatContains(Item.CROISSANT)
+            if (ovenThatContainsCroissant != null) {
+                return when (playerItem) {
+                    null -> listOf(use(ovenThatContainsCroissant))
+                    else -> listOf(dropPlayerItem("Drop item to get croissant before it burns!"))
+                }
+            }
+
+            return when (playerItem) {
                 null -> {
                     actionsToServeBestCustomer(customers, Action.Wait("No customers"))
                 }
 
                 Item.STRAWBERRIES -> {
                     listOf(use(Equipment.CHOPPING_BOARD))
+                }
+
+                Item.DOUGH -> {
+                    val emptyOven = gameState.getEmptyOven()
+                    if (emptyOven != null) {
+                        listOf(use(emptyOven))
+                    } else {
+                        listOf(dropPlayerItem())
+                    }
                 }
 
                 else -> {
@@ -564,20 +642,24 @@ class BestActionResolver {
         private fun get(item: Item): List<Action> {
             val tableWithItem = gameState.findTableWith(item)
             if (tableWithItem != null) {
-                return listOf(Action.Use(tableWithItem.position, "Got some ${item.name} on table $tableWithItem"))
+                return listOf(use(tableWithItem))
             }
 
             val equipment = kitchen.getEquipmentThatProvides(item)
             if (equipment != null) {
-                val equipmentPosition = kitchen.getPositionOf(equipment)
-                return listOf(Action.Use(equipmentPosition, equipment.name))
+                return listOf(use(equipment))
             }
 
             return prepare(item)
         }
 
-        fun dropPlayerItem(): Action {
-            return Action.Use(kitchen.getPositionOf(Equipment.WINDOW), "dropPlayerItem")
+        fun dropPlayerItem(comment: String = "dropPlayerItem"): Action {
+            return if (gameState.needsToBePrepared(player.item!!)) {
+                val nextEmptyTable = gameState.findEmptyTablesNextTo(player.position).firstOrNull() ?: TODO("Search for empty table")
+                use(nextEmptyTable, comment)
+            } else {
+                use(Equipment.WINDOW, comment)
+            }
         }
 
         private fun prepare(item: Item): List<Action> {
@@ -587,18 +669,36 @@ class BestActionResolver {
                 actions += dropPlayerItem()
             }
 
-            if (item == Item.CHOPPED_STRAWBERRIES) {
-                if (gameState.player.item != Item.STRAWBERRIES) actions += get(Item.STRAWBERRIES)
-                actions += Action.Use(gameState.kitchen.getPositionOf(Equipment.CHOPPING_BOARD), "Chopping...")
-            } else {
-                throw DontKnowHowToPrepare(item)
+            when (item) {
+                Item.CHOPPED_STRAWBERRIES -> {
+                    if (gameState.player.item != Item.STRAWBERRIES) actions += get(Item.STRAWBERRIES)
+                    actions += use(Equipment.CHOPPING_BOARD, "Chopping...")
+                }
+
+                Item.CROISSANT -> {
+                    val ovenWithDough = gameState.getOvenThatContains(Item.DOUGH)
+                    if (ovenWithDough != null) {
+                        actions += use(ovenWithDough, "Getting ${Item.CROISSANT.name} from baking oven")
+                    } else {
+                        if (gameState.player.item != Item.DOUGH) actions += get(Item.DOUGH)
+                        actions += use(Equipment.OVEN, "Baking...")
+                    }
+                }
+
+                else -> {
+                    throw DontKnowHowToPrepare(item)
+                }
             }
 
             return actions.toList()
         }
 
-        private fun use(equipment: Equipment): Action {
-            return Action.Use(kitchen.getPositionOf(equipment))
+        private fun use(table: Table, comment: String = "Got some ${table.item?.name} on table $table"): Action {
+            return Action.Use(table.position, comment)
+        }
+
+        private fun use(equipment: Equipment, comment: String = "Use ${equipment.name}"): Action {
+            return Action.Use(kitchen.getPositionOf(equipment), comment)
         }
 
     }
@@ -650,7 +750,6 @@ class Simulator {
                 }
             }
 
-            debug("TODO simulate $action")
             TODO("simulate $action")
         } else {
             return simulate(gameState, Action.Move(position, action.comment), stopNextToPosition = true)
@@ -659,11 +758,12 @@ class Simulator {
 
     private fun simulateUse(table: Table, gameState: GameState): GameState {
         val player = gameState.player
+        val tableItem = table.item ?: return gameState
         return gameState.copy(
             turnsRemaining = gameState.turnsRemaining - 1,
             tablesWithItem = gameState.tablesWithItem - table,
             player = if (player.item == null) player else player.copy(
-                item = player.item.with(table.item)
+                item = player.item.with(tableItem)
             )
         )
     }
@@ -806,23 +906,9 @@ class PathFinder(private val gameState: GameState) {
     }
 
     private fun nextEmptyPositions(position: Position): Set<Position> {
-        val x = position.x
-        val y = position.y
-
-        val adjacentPositions = listOf(
-            Position(x, y - 1),
-            Position(x - 1, y),
-            Position(x + 1, y),
-            Position(x, y + 1),
-        )
-
-        val nextEmptyPositions = mutableSetOf<Position>()
-        for (adjacentPosition in adjacentPositions) {
-            if (x >= 0 && y >= 0 && x <= Position.MAX_X && y <= Position.MAX_Y && gameState.isEmpty(adjacentPosition)) {
-                nextEmptyPositions += adjacentPosition
-            }
-        }
-        return nextEmptyPositions.toSet()
+        return position.adjacentPositions()
+            .filter(gameState::isEmpty)
+            .toSet()
     }
 }
 
@@ -847,7 +933,6 @@ data class Path(val positions: List<Position>) : List<Position> by positions {
 internal class Writer(`out`: OutputStream) : AutoCloseable {
     private val out = PrintWriter(out)
     private var currentLineIsEmpty = true
-    private val equipmentWriter = EquipmentWriter()
 
     companion object {
         val EMPTY_KITCHEN_LINES = listOf(
@@ -884,7 +969,7 @@ internal class Writer(`out`: OutputStream) : AutoCloseable {
     private fun charAt(kitchen: Kitchen, position: Position): Char? {
         val equipment = kitchen.getEquipmentAt(position)
         if (equipment != null) {
-            return equipmentWriter.write(equipment)
+            return equipmentMapper.write(equipment)
         }
         return null
     }
@@ -902,8 +987,8 @@ internal class Writer(`out`: OutputStream) : AutoCloseable {
         write(gameState.tablesWithItem.size)
         gameState.tablesWithItem.forEach { write(it) }
 
-        write("NONE") // TODO ovenContents
-        write("0") // TODO ovenTimer
+        write(gameState.ovenContents)
+        write(gameState.ovenTimer)
 
         write(gameState.customers)
     }
@@ -919,17 +1004,12 @@ internal class Writer(`out`: OutputStream) : AutoCloseable {
     }
 
     private fun write(position: Position) {
-        write(position.x, position.y)
+        write(position.x)
+        write(position.y)
     }
 
     private fun write(item: Item) {
         write(item.name)
-    }
-
-    private fun write(vararg values: Any) {
-        for (value in values) {
-            write(value)
-        }
     }
 
     private fun write(table: Table) {
@@ -942,9 +1022,9 @@ internal class Writer(`out`: OutputStream) : AutoCloseable {
         write(customer.award)
     }
 
-    private fun write(value: Any) {
+    private fun write(value: Any?) {
         if (!currentLineIsEmpty) out.write(" ")
-        out.write(value.toString())
+        out.write(value?.toString() ?: "NONE")
         if (currentLineIsEmpty) currentLineIsEmpty = false
     }
 
