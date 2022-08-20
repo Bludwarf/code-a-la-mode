@@ -16,8 +16,12 @@ internal class BestActionResolverTest {
         "ligue3/game-7942577706886182900-state-28.txt, USE 9 0, Use STRAWBERRIES_CRATE",
         "ligue3/game-7942577706886182900-state-88.txt, USE 0 3, Drop item to get CROISSANT before it burns!",
         "ligue3/game-7942577706886182900-state-193.txt, USE 0 4, dropPlayerItem",
-        "ligue3/game-7942577706886182900-state-5.txt, USE 2 3, Use CHOPPING_BOARD",
-        "ligue3/game-7942577706886182900-state-13.txt, USE 10 5, Use BLUEBERRIES_CRATE",
+        "ligueBronze/game-7942577706886182900-state-5.txt, USE 2 3, Use CHOPPING_BOARD",
+        "ligueBronze/game-7942577706886182900-state-13.txt, USE 10 5, Use BLUEBERRIES_CRATE",
+        "ligueBronze/game-7942577706886182900-state-33.txt, USE 0 5, Use OVEN",
+        "ligueBronze/game-7942577706886182900-state-121.txt, USE 5 0, Use DISHWASHER",
+        "ligueBronze/game-7942577706886182900-state-125.txt, USE 0 2, ICE_CREAM_CRATE",
+        "ligueBronze/game-7942577706886182900-state-129.txt, USE 2 4, \"Got some TART on table Table(position=2 4, item=Item(name=TART))\"",
         quoteCharacter = '"',
     )
     fun resolveBestAction(gameStatePath: String, expectedActionString: String, expectedActionComment: String) {
@@ -41,7 +45,7 @@ internal class BestActionResolverTest {
         val gameState = gameState(gameStatePath)
         val bestActionResolver = BestActionResolver()
 
-        val action = bestActionResolver.resolveBestActionFrom(gameState)
+        bestActionResolver.resolveBestActionFrom(gameState)
 
         assertThat(System.currentTimeMillis())
             .`as`("Maximum response time is <= 1 second")

@@ -480,6 +480,9 @@ abstract class Step {
     data class PutInOven(val item: Item) : Step() {
         override fun isDone(gameState: GameState): Boolean = gameState.ovenContents == item
     }
+    data class WaitForItemInOven(val item: Item) : Step() {
+        override fun isDone(gameState: GameState): Boolean = gameState.ovenContents == item
+    }
     data class GetFromOven(val item: Item) : Step() {
         override fun isDone(gameState: GameState): Boolean = gameState.player.has(item)
     }
@@ -571,6 +574,8 @@ class ActionsResolver(val gameState: GameState) {
     fun nextActionFrom(gameState: GameState): Action {
         val playerItem = gameState.player.item
 
+        // TODO il faut aussi traiter le cas d'urgence quand on a une tarte
+
         val ovenThatContainsCroissant = gameState.getOvenThatContains(Item.CROISSANT)
         if (ovenThatContainsCroissant != null) {
             return when (playerItem) {
@@ -615,7 +620,7 @@ class ActionsResolver(val gameState: GameState) {
     private fun get(item: Item): Action {
         val tableWithItem = gameState.findTableWith(item)
         if (tableWithItem != null) {
-            if (player.item != null) {
+            if (!playerIsAllowedToGrab(tableWithItem.item!!)) {
                 throw PlayerHasAlreadyAnItem()
             }
             return use(tableWithItem)
@@ -629,15 +634,25 @@ class ActionsResolver(val gameState: GameState) {
             return use(equipment)
         }
 
-        return prepare(item)
+        return if (item.isBase) prepare(item) else assemble(item.baseItems)
+    }
+
+    private fun playerIsAllowedToGrab(item: Item): Boolean {
+        val playerItem = player.item ?: return true
+        if (playerItem == Item.CHOPPED_DOUGH && item == Item.BLUEBERRIES) {
+            return true
+        }
+        if (playerItem.contains(Item.DISH)) {
+            return !playerItem.contains(item)
+        }
+        return false
     }
 
     private fun playerIsAllowedToUse(equipment: Equipment): Boolean {
-        return if (player.item == Item.CHOPPED_DOUGH && equipment is ItemProvider && equipment.providedItem == Item.BLUEBERRIES) {
-            true
-        } else {
-            player.item == null
+        if (equipment is ItemProvider) {
+            return playerIsAllowedToGrab(equipment.providedItem)
         }
+        return true
     }
 
     fun dropPlayerItem(comment: String = "dropPlayerItem"): Action {
@@ -659,6 +674,7 @@ class ActionsResolver(val gameState: GameState) {
                 is Step.GetSome -> get(nextStepToDo.item)
                 is Step.Transform -> use(nextStepToDo.equipment)
                 is Step.PutInOven -> use(Equipment.OVEN)
+                is Step.WaitForItemInOven -> Action.Wait("Waiting for oven to bake ${nextStepToDo.item}")
                 is Step.GetFromOven -> use(Equipment.OVEN)
                 else -> Action.Wait("Cannot translate step into actions : $nextStepToDo")
             }
@@ -679,10 +695,10 @@ class ActionsResolver(val gameState: GameState) {
         val missingBaseItemsToPrepare = missingBaseItems.filter { baseItem -> !gameState.contains(baseItem) }
         if (missingBaseItemsToPrepare.isNotEmpty()) return prepare(missingBaseItemsToPrepare.first())
 
-        val missingBaseItemsWithoutDish = missingBaseItems - Item.DISH
-        if (missingBaseItemsWithoutDish.isNotEmpty()) return get(missingBaseItemsWithoutDish.first())
+        if (!playerBaseItems.contains(Item.DISH)) return get(Item.DISH)
 
-        return get(Item.DISH)
+        val missingBaseItemsWithoutDish = missingBaseItems - Item.DISH
+        return get(missingBaseItemsWithoutDish.first())
     }
 
     private fun use(table: Table, comment: String = "Got some ${table.item?.name} on table $table"): Action {
@@ -718,6 +734,7 @@ class RecipeBook {
             Item.CROISSANT -> listOf(
                 Step.GetSome(Item.DOUGH),
                 Step.PutInOven(Item.DOUGH),
+                Step.WaitForItemInOven(Item.CROISSANT),
                 Step.GetFromOven(Item.CROISSANT),
             )
 
@@ -726,6 +743,7 @@ class RecipeBook {
             Item.TART -> listOf(
                 Step.GetSome(Item.RAW_TART),
                 Step.PutInOven(Item.RAW_TART),
+                Step.WaitForItemInOven(Item.TART),
                 Step.GetFromOven(Item.TART),
             )
 
