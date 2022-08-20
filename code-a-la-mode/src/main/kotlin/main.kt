@@ -1,6 +1,7 @@
 import java.io.OutputStream
 import java.io.PrintWriter
 import java.util.*
+import java.util.function.Supplier
 import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -72,7 +73,7 @@ data class GameState(
     val tablesWithItem: Set<Table>,
     val customers: List<Customer>,
     val playerScore: Int = 0,
-    val ovenContents: Item?,
+    val ovenContents: Item? = null,
     val ovenTimer: Int = 0,
 ) {
     fun findTableWith(item: Item): Table? {
@@ -94,10 +95,6 @@ data class GameState(
 
     fun contains(item: Item): Boolean {
         return findTableWith(item) != null || kitchen.getEquipmentThatProvides(item) != null
-    }
-
-    fun needsToBePrepared(item: Item): Boolean {
-        return !contains(item)
     }
 
     fun getOvenThatContains(item: Item?): Oven? {
@@ -214,7 +211,16 @@ value class Input(private val input: Scanner) {
         val ovenContents = nextItem()
         val ovenTimer = input.nextInt()
         val customers = nextCustomers()
-        return GameState(game, turnsRemaining, player, partner, tablesWithItem, customers, ovenContents = ovenContents, ovenTimer = ovenTimer)
+        return GameState(
+            game,
+            turnsRemaining,
+            player,
+            partner,
+            tablesWithItem,
+            customers,
+            ovenContents = ovenContents,
+            ovenTimer = ovenTimer
+        )
     }
 
     internal fun nextAction(): Action {
@@ -362,19 +368,42 @@ data class Item(val name: String) {
     companion object {
         val NONE = Item("NONE")
         val DISH = Item("DISH")
-        val ICE_CREAM = Item("ICE_CREAM")
         val BLUEBERRIES = Item("BLUEBERRIES")
+        val ICE_CREAM = Item("ICE_CREAM")
+
         val STRAWBERRIES = Item("STRAWBERRIES")
         val CHOPPED_STRAWBERRIES = Item("CHOPPED_" + STRAWBERRIES.name)
+
         val DOUGH = Item("DOUGH")
         val CROISSANT = Item("CROISSANT")
+
+        val CHOPPED_DOUGH = Item("CHOPPED_DOUGH")
+        val RAW_TART = Item("RAW_TART")
+        val TART = Item("TART")
     }
 
 }
 
-class Items(private val value: List<Item>) : List<Item> by value
+class Items(private val value: List<Item>) : List<Item> by value {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Items) return false
 
-data class Chef(override var position: Position, val item: Item?) : Positioned
+        if (value != other.value) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        return value.hashCode()
+    }
+}
+
+data class Chef(override var position: Position, val item: Item? = null) : Positioned {
+    fun has(item: Item): Boolean {
+        return this.item == item
+    }
+}
 
 data class Table(override val position: Position, var item: Item? = null) : Positioned {
     override fun equals(other: Any?): Boolean {
@@ -394,7 +423,7 @@ data class Table(override val position: Position, var item: Item? = null) : Posi
 class Customer(
     val item: Item,
     /** Award intrinsèque + nombre de tours restants */
-    val award: Int
+    val award: Int,
 ) {
     override fun toString(): String {
         return "Customer(item = $item, award = $award)"
@@ -409,73 +438,51 @@ interface Positioned {
     }
 }
 
-abstract class Action(val name: String, val comment: String? = null) {
+abstract class Action(val command: String, val comment: String? = null) {
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
-        if (other?.javaClass != javaClass) return false
-        other as Action
-        return name == other.name
+        if (other !is Action) return false
+        return command == other.command
     }
 
     override fun hashCode(): Int {
-        return name.hashCode()
+        return command.hashCode()
     }
 
-    class Move(val position: Position, comment: String? = null) : Action("MOVE", comment) {
-        override fun toString(): String {
-            return if (comment != null) {
-                "$name $position; $comment"
-            } else {
-                "$name $position"
-            }
-        }
+    class Move(val position: Position, comment: String? = null) : Action("MOVE $position", comment)
 
-        override fun equals(other: Any?): Boolean {
-            if (!super.equals(other)) return false
-            if (this === other) return true
-            if (other.javaClass != javaClass) return false
-            other as Move
-            return position == other.position
-        }
-
-        override fun hashCode(): Int {
-            return "$name $position".hashCode()
-        }
-    }
-
-    class Use(val position: Position, comment: String? = null) : Action("USE", comment) {
-        override fun toString(): String {
-            return if (comment != null) {
-                "$name $position; $comment"
-            } else {
-                "$name $position"
-            }
-        }
-
-        override fun equals(other: Any?): Boolean {
-            if (!super.equals(other)) return false
-            if (this === other) return true
-            if (other.javaClass != javaClass) return false
-            other as Use
-            return position == other.position
-        }
-
-        override fun hashCode(): Int {
-            return "$name $position".hashCode()
-        }
-    }
+    class Use(val position: Position, comment: String? = null) : Action("USE $position", comment)
 
     class Wait(comment: String? = null) : Action("WAIT", comment)
 
     override fun toString(): String {
         return if (comment != null) {
-            "$name; $comment"
+            "$command; $comment"
         } else {
-            name
+            command
         }
     }
 
+}
+
+abstract class Step {
+
+    abstract fun isDone(gameState: GameState): Boolean
+
+    data class GetSome(val item: Item) : Step() {
+        override fun isDone(gameState: GameState): Boolean = gameState.player.has(item)
+    }
+
+    data class Transform(val itemToTransform: Item, val equipment: Equipment, val resultingItem: Item) : Step() {
+        override fun isDone(gameState: GameState): Boolean = gameState.player.has(resultingItem)
+    }
+    data class PutInOven(val item: Item) : Step() {
+        override fun isDone(gameState: GameState): Boolean = gameState.ovenContents == item
+    }
+    data class GetFromOven(val item: Item) : Step() {
+        override fun isDone(gameState: GameState): Boolean = gameState.player.has(item)
+    }
 }
 
 class EquipmentMapper {
@@ -525,7 +532,7 @@ open class Equipment(val name: String) {
     }
 }
 
-class Oven: Equipment("OVEN") {
+class Oven : Equipment("OVEN") {
 
 }
 
@@ -548,185 +555,199 @@ class BestActionResolver {
 
     fun resolveBestActionFrom(gameState: GameState): Action {
         val actionsResolver = ActionsResolver(gameState)
-        return actionsResolver.nextActionsFrom(gameState).first()
+        return actionsResolver.nextActionFrom(gameState)
     }
 
-    private class ActionsResolver(val gameState: GameState) {
-        private val kitchen get() = gameState.kitchen
-        private val player get() = gameState.player
-        private val tablesWithItem get() = gameState.tablesWithItem
-        private val customers get() = gameState.customers
-        private val useWindow = use(Equipment.WINDOW)
+}
 
-        fun nextActionsFrom(gameState: GameState): List<Action> {
-            val playerItem = gameState.player.item
+class ActionsResolver(val gameState: GameState) {
+    private val kitchen get() = gameState.kitchen
+    private val player get() = gameState.player
+    private val tablesWithItem get() = gameState.tablesWithItem
+    private val customers get() = gameState.customers
+    private val useWindow = use(Equipment.WINDOW)
+    private val recipeBook = RecipeBook()
 
-            val ovenThatContainsCroissant = gameState.getOvenThatContains(Item.CROISSANT)
-            if (ovenThatContainsCroissant != null) {
-                return when (playerItem) {
-                    null -> listOf(use(ovenThatContainsCroissant))
-                    else -> listOf(dropPlayerItem("Drop item to get ${Item.CROISSANT.name} before it burns!"))
-                }
-            }
+    fun nextActionFrom(gameState: GameState): Action {
+        val playerItem = gameState.player.item
 
+        val ovenThatContainsCroissant = gameState.getOvenThatContains(Item.CROISSANT)
+        if (ovenThatContainsCroissant != null) {
             return when (playerItem) {
-                null -> {
-                    actionsToServeBestCustomer(customers, Action.Wait("No customers"))
-                }
-
-                Item.STRAWBERRIES -> {
-                    listOf(use(Equipment.CHOPPING_BOARD))
-                }
-
-                Item.DOUGH -> {
-                    val emptyOven = gameState.getEmptyOven()
-                    if (emptyOven != null) {
-                        listOf(use(emptyOven))
-                    } else {
-                        listOf(dropPlayerItem())
-                    }
-                }
-
-                Item.CROISSANT -> {
-                    listOf(dropPlayerItem("Drop just baked CROISSANT"))
-                }
-
-                else -> {
-                    val compatibleCustomers = customers.filter { customer -> customer.item.contains(playerItem) }
-                    actionsToServeBestCustomer(compatibleCustomers, dropPlayerItem())
-                }
+                null -> use(ovenThatContainsCroissant)
+                else -> dropPlayerItem("Drop item to get ${Item.CROISSANT.name} before it burns!")
             }
         }
 
-        private fun actionsToServeBestCustomer(customers: List<Customer>, fallbackAction: Action): List<Action> {
-            val actionsToServerBestCustomer = customers
-                .mapNotNull { customer ->
-                    try {
-                        ActionsToServeCustomer(serve(customer), customer)
-                    } catch (e: Throwable) {
-                        null
-                    }
-                }
-                .maxByOrNull(::estimateAward)
-                ?: return listOf(fallbackAction)
-            return actionsToServerBestCustomer.actions
-        }
-
-        private data class ActionsToServeCustomer(val actions: List<Action>, val customer: Customer)
-
-        fun estimateAward(actionsToServeCustomer: ActionsToServeCustomer): Int {
-            // TODO
-            return actionsToServeCustomer.customer.award
-        }
-
-        fun serve(customer: Customer): List<Action> {
-
-            val actions = mutableListOf<Action>()
-
-            if (player.item != customer.item) {
-
-                // Le plat existe déjà sur une table ?
-                val tableWithItem = tablesWithItem.find { table -> table.item == customer.item }
-                if (tableWithItem != null) {
-                    actions += Action.Use(tableWithItem.position, tableWithItem.toString())
-                } else {
-                    actions += assemble(customer.item)
-                }
-
-            }
-
-            actions += useWindow
-
-            return actions.toList()
-        }
-
-        fun assemble(item: Item): List<Action> {
-            if (player.item == item) {
-                return emptyList()
-            }
-
-            val playerBaseItems = player.item?.baseItems ?: emptyList()
-
-            val missingBaseItems = (item.baseItems - playerBaseItems.toSet())
-            val getActionsWithoutDish = missingBaseItems
-                .filter { it != Item.DISH }
-                .flatMap { baseItem -> get(baseItem) }
-            val getActions = if (missingBaseItems.contains(Item.DISH)) {
-                get(Item.DISH) + getActionsWithoutDish
-            } else {
-                getActionsWithoutDish
-            }
-
-            val missingBaseItemsToPrepare = missingBaseItems.filter { baseItem -> !gameState.contains(baseItem) }
-            val prepareActions = missingBaseItemsToPrepare.flatMap { baseItem -> prepare(baseItem) }
-
-            return prepareActions + getActions
-        }
-
-        private fun get(item: Item): List<Action> {
-            val tableWithItem = gameState.findTableWith(item)
-            if (tableWithItem != null) {
-                return listOf(use(tableWithItem))
-            }
-
-            val equipment = kitchen.getEquipmentThatProvides(item)
-            if (equipment != null) {
-                return listOf(use(equipment))
-            }
-
-            return prepare(item)
-        }
-
-        fun dropPlayerItem(comment: String = "dropPlayerItem"): Action {
-            return if (gameState.needsToBePrepared(player.item!!)) {
-                val nextEmptyTable = gameState.findEmptyTablesNextTo(player.position).firstOrNull() ?: TODO("Search for empty table")
-                use(nextEmptyTable, comment)
-            } else {
-                use(Equipment.WINDOW, comment)
-            }
-        }
-
-        private fun prepare(item: Item): List<Action> {
-            val actions = mutableListOf<Action>()
-
-            if (player.item != null) {
-                actions += dropPlayerItem()
-            }
-
-            when (item) {
-                Item.CHOPPED_STRAWBERRIES -> {
-                    if (gameState.player.item != Item.STRAWBERRIES) actions += get(Item.STRAWBERRIES)
-                    actions += use(Equipment.CHOPPING_BOARD, "Chopping...")
-                }
-
-                Item.CROISSANT -> {
-                    val ovenWithDough = gameState.getOvenThatContains(Item.DOUGH)
-                    if (ovenWithDough != null) {
-                        actions += use(ovenWithDough, "Getting ${Item.CROISSANT.name} from baking oven")
-                    } else {
-                        if (gameState.player.item != Item.DOUGH) actions += get(Item.DOUGH)
-                        actions += use(Equipment.OVEN, "Baking...")
-                    }
-                }
-
-                else -> {
-                    throw DontKnowHowToPrepare(item)
-                }
-            }
-
-            return actions.toList()
-        }
-
-        private fun use(table: Table, comment: String = "Got some ${table.item?.name} on table $table"): Action {
-            return Action.Use(table.position, comment)
-        }
-
-        private fun use(equipment: Equipment, comment: String = "Use ${equipment.name}"): Action {
-            return Action.Use(kitchen.getPositionOf(equipment), comment)
-        }
-
+        return serveBestCustomer(customers, ::dropPlayerItem)
     }
 
+    private fun serveBestCustomer(customers: List<Customer>, fallbackActionSupplier: Supplier<Action>): Action {
+        val actionToServerBestCustomer = customers
+            .mapNotNull { customer ->
+                try {
+                    ActionToServeCustomer(serve(customer), customer)
+                } catch (e: Throwable) {
+                    debug("Cannot server customer $customer : ${e.message}")
+                    null
+                }
+            }
+            .maxByOrNull(::estimateAward)
+            ?: return fallbackActionSupplier.get()
+        return actionToServerBestCustomer.action
+    }
+
+    data class ActionToServeCustomer(val action: Action, val customer: Customer)
+
+    fun estimateAward(actionToServeCustomer: ActionToServeCustomer): Int {
+        // TODO
+        return actionToServeCustomer.customer.award
+    }
+
+    fun serve(customer: Customer): Action {
+        return if (player.item == customer.item) {
+            useWindow
+        } else {
+            get(customer.item)
+        }
+    }
+
+    private fun get(item: Item): Action {
+        val tableWithItem = gameState.findTableWith(item)
+        if (tableWithItem != null) {
+            if (player.item != null) {
+                throw PlayerHasAlreadyAnItem()
+            }
+            return use(tableWithItem)
+        }
+
+        val equipment = kitchen.getEquipmentThatProvides(item)
+        if (equipment != null) {
+            if (!playerIsAllowedToUse(equipment)) {
+                throw PlayerHasAlreadyAnItem()
+            }
+            return use(equipment)
+        }
+
+        return prepare(item)
+    }
+
+    private fun playerIsAllowedToUse(equipment: Equipment): Boolean {
+        return if (player.item == Item.CHOPPED_DOUGH && equipment is ItemProvider && equipment.providedItem == Item.BLUEBERRIES) {
+            true
+        } else {
+            player.item == null
+        }
+    }
+
+    fun dropPlayerItem(comment: String = "dropPlayerItem"): Action {
+        return if (recipeBook.contains(player.item!!)) {
+            val nextEmptyTable =
+                gameState.findEmptyTablesNextTo(player.position).firstOrNull() ?: TODO("Search for empty table")
+            use(nextEmptyTable, comment)
+        } else {
+            use(Equipment.WINDOW, comment)
+        }
+    }
+
+    private fun prepare(item: Item): Action {
+        return if (item.isBase) {
+            val stepsToPrepare = recipeBook.stepsToPrepare(item)
+            val lastDoneStepIndex = stepsToPrepare.indexOfLast { step -> step.isDone(gameState) }
+            val nextStepToDo = if (lastDoneStepIndex < stepsToPrepare.size - 1) stepsToPrepare[lastDoneStepIndex + 1] else return Action.Wait("Recipe completed !?")
+            when (nextStepToDo) {
+                is Step.GetSome -> get(nextStepToDo.item)
+                is Step.Transform -> use(nextStepToDo.equipment)
+                is Step.PutInOven -> use(Equipment.OVEN)
+                is Step.GetFromOven -> use(Equipment.OVEN)
+                else -> Action.Wait("Cannot translate step into actions : $nextStepToDo")
+            }
+        } else {
+            assemble(item.baseItems)
+        }
+    }
+
+    fun assemble(baseItems: List<Item>): Action {
+//        if (player.item == item) {
+//            return emptyList()
+//        }
+
+        val playerBaseItems = player.item?.baseItems ?: emptyList()
+
+        val missingBaseItems = (baseItems - playerBaseItems.toSet())
+
+        val missingBaseItemsToPrepare = missingBaseItems.filter { baseItem -> !gameState.contains(baseItem) }
+        if (missingBaseItemsToPrepare.isNotEmpty()) return prepare(missingBaseItemsToPrepare.first())
+
+        val missingBaseItemsWithoutDish = missingBaseItems - Item.DISH
+        if (missingBaseItemsWithoutDish.isNotEmpty()) return get(missingBaseItemsWithoutDish.first())
+
+        return get(Item.DISH)
+    }
+
+    private fun use(table: Table, comment: String = "Got some ${table.item?.name} on table $table"): Action {
+        return Action.Use(table.position, comment)
+    }
+
+    fun use(equipment: Equipment, comment: String = "Use ${equipment.name}"): Action {
+        return Action.Use(kitchen.getPositionOf(equipment), comment)
+    }
+
+}
+
+class PlayerHasAlreadyAnItem : Throwable("Player has already an item")
+
+class RecipeBook {
+    fun stepsToPrepare(item: Item, fallbackValue: List<Step>? = null): List<Step> {
+        val baseItemsWithoutDish = item.baseItems - Item.DISH
+        return baseItemsWithoutDish.flatMap { stepsToPrepareBaseItem(it, fallbackValue) } + Step.GetSome(Item.DISH)
+    }
+
+    fun stepsToPrepareBaseItem(item: Item, fallbackValue: List<Step>? = null): List<Step> {
+        return when (item) {
+
+            // Ligue Bois 2
+
+            Item.CHOPPED_STRAWBERRIES -> listOf(
+                Step.GetSome(Item.STRAWBERRIES),
+                Step.Transform(Item.STRAWBERRIES, Equipment.CHOPPING_BOARD, Item.CHOPPED_STRAWBERRIES),
+            )
+
+            // Ligue Bois 3
+
+            Item.CROISSANT -> listOf(
+                Step.GetSome(Item.DOUGH),
+                Step.PutInOven(Item.DOUGH),
+                Step.GetFromOven(Item.CROISSANT),
+            )
+
+            // Ligue Bronze
+
+            Item.TART -> listOf(
+                Step.GetSome(Item.RAW_TART),
+                Step.PutInOven(Item.RAW_TART),
+                Step.GetFromOven(Item.TART),
+            )
+
+            Item.RAW_TART -> listOf(
+                Step.GetSome(Item.CHOPPED_DOUGH),
+                Step.GetSome(Item.BLUEBERRIES),
+            )
+
+            Item.CHOPPED_DOUGH -> listOf(
+                Step.GetSome(Item.DOUGH),
+                Step.Transform(Item.DOUGH, Equipment.CHOPPING_BOARD, Item.CHOPPED_DOUGH),
+            )
+
+            else -> fallbackValue ?: throw DontKnowHowToPrepare(item)
+        }
+    }
+
+    fun contains(item: Item): Boolean {
+        val fallbackValue = emptyList<Step>()
+        val stepsToPrepare = stepsToPrepare(item, fallbackValue)
+        return stepsToPrepare !== fallbackValue
+    }
 }
 
 class DontKnowHowToPrepare(item: Item) : Throwable("Don't know how to prepare $item")
@@ -795,7 +816,7 @@ class Simulator {
     private fun simulate(
         gameState: GameState,
         action: Action.Move,
-        stopNextToPosition: Boolean = false
+        stopNextToPosition: Boolean = false,
     ): GameState {
         val stopCondition =
             if (stopNextToPosition) gameState.player.position.isNextTo(action.position) else gameState.player.position == action.position
@@ -914,7 +935,7 @@ class PathFinder(private val gameState: GameState) {
     internal fun possiblePaths(
         position: Position,
         target: Position,
-        path: Path = Path(listOf(gameState.player.position))
+        path: Path = Path(listOf(gameState.player.position)),
     ): List<Path> {
         if (position == target) {
             return listOf(path)
