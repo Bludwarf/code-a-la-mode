@@ -2,6 +2,7 @@
 
 import TestUtils.Companion.action
 import TestUtils.Companion.gameState
+import org.apache.commons.lang3.StringUtils
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
@@ -20,8 +21,9 @@ internal class BestActionResolverTest {
         "ligueBronze/game-7942577706886182900-state-13.txt, USE 10 5, Use BLUEBERRIES_CRATE",
         "ligueBronze/game-7942577706886182900-state-33.txt, USE 0 5, Use OVEN",
         "ligueBronze/game-7942577706886182900-state-121.txt, USE 5 0, Use DISHWASHER",
-        "ligueBronze/game-7942577706886182900-state-125.txt, USE 0 2, ICE_CREAM_CRATE",
+        "ligueBronze/game-7942577706886182900-state-125.txt, USE 0 2, Use ICE_CREAM_CRATE",
         "ligueBronze/game-7942577706886182900-state-129.txt, USE 2 4, \"Got some TART on table Table(position=2 4, item=Item(name=TART))\"",
+        "ligueBronze/game--8170461584516249600-state-37.txt, USE 3 4, \"Got some DISH-BLUEBERRIES-ICE_CREAM-CHOPPED_STRAWBERRIES on table Table(position=3 4, item=Item(name=DISH-BLUEBERRIES-ICE_CREAM-CHOPPED_STRAWBERRIES))\"", // On récupère l'assiette déjà existante qui est compatible avec le 3e client
         quoteCharacter = '"',
     )
     fun resolveBestAction(gameStatePath: String, expectedActionString: String, expectedActionComment: String) {
@@ -32,7 +34,9 @@ internal class BestActionResolverTest {
 
         val expectedAction = action(expectedActionString)
         assertThat(action).isEqualTo(expectedAction)
-        assertThat(action.comment).isEqualTo(expectedActionComment)
+        if (StringUtils.isNoneBlank(expectedActionComment)) {
+            assertThat(action.comment).isEqualTo(expectedActionComment)
+        }
     }
 
     @ParameterizedTest

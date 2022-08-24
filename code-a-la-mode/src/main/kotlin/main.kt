@@ -1,6 +1,7 @@
 import java.io.OutputStream
 import java.io.PrintWriter
 import java.util.*
+import java.util.function.Function
 import java.util.function.Supplier
 import kotlin.math.abs
 import kotlin.math.pow
@@ -690,15 +691,33 @@ class ActionsResolver(val gameState: GameState) {
 
         val playerBaseItems = player.item?.baseItems ?: emptyList()
 
-        val missingBaseItems = (baseItems - playerBaseItems.toSet())
+        if (playerBaseItems.isEmpty()) {
+            val tableWithMaxCompatibleItems = gameState.tablesWithItem
+                .filter { table -> table.item!!.baseItems.contains(Item.DISH) }
+                .filter { table -> baseItems.containsAll(table.item!!.baseItems) ?: false }
+                .maxByOrNull { table -> table.item!!.baseItems.size }
+            if (tableWithMaxCompatibleItems != null) {
+                return prepareFirstMissingBaseItemOr(baseItems, tableWithMaxCompatibleItems.item!!.baseItems) {
+                    use(tableWithMaxCompatibleItems)
+                }
+            }
+        }
 
+        return prepareFirstMissingBaseItemOr(baseItems, playerBaseItems) { missingBaseItems ->
+            if (!playerBaseItems.contains(Item.DISH)) {
+                get(Item.DISH)
+            } else {
+                val missingBaseItemsWithoutDish = missingBaseItems - Item.DISH
+                get(missingBaseItemsWithoutDish.first())
+            }
+        }
+    }
+
+    private fun prepareFirstMissingBaseItemOr(baseItems: List<Item>, alreadyPreparedBaseItems: List<Item>, nextActionFromMissingBaseItemsFunction: (List<Item>) -> Action): Action {
+        val missingBaseItems = (baseItems - alreadyPreparedBaseItems.toSet())
         val missingBaseItemsToPrepare = missingBaseItems.filter { baseItem -> !gameState.contains(baseItem) }
         if (missingBaseItemsToPrepare.isNotEmpty()) return prepare(missingBaseItemsToPrepare.first())
-
-        if (!playerBaseItems.contains(Item.DISH)) return get(Item.DISH)
-
-        val missingBaseItemsWithoutDish = missingBaseItems - Item.DISH
-        return get(missingBaseItemsWithoutDish.first())
+        return nextActionFromMissingBaseItemsFunction(missingBaseItems)
     }
 
     private fun use(table: Table, comment: String = "Got some ${table.item?.name} on table $table"): Action {
