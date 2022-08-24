@@ -19,7 +19,7 @@ internal class BestActionResolverTest {
         "ligue3/game-7942577706886182900-state-193.txt, USE 0 4, Drop item",
         "ligueBronze/game-7942577706886182900-state-5.txt, USE 2 3, Use CHOPPING_BOARD",
         "ligueBronze/game-7942577706886182900-state-13.txt, USE 10 5, Use BLUEBERRIES_CRATE",
-        "ligueBronze/game-7942577706886182900-state-33.txt, USE 9 0, Use STRAWBERRIES_CRATE", // On va prendre des fraises pour les découper en attendant la cuisson
+        "ligueBronze/game-7942577706886182900-state-33.txt, USE 0 5, Use OVEN", // On retire la tarte cuite du four
         "ligueBronze/game-7942577706886182900-state-121.txt, USE 5 0, Use DISHWASHER",
         "ligueBronze/game-7942577706886182900-state-125.txt, USE 0 2, Use ICE_CREAM_CRATE",
         "ligueBronze/game-7942577706886182900-state-129.txt, USE 2 4, \"Got some TART on table Table(position=2 4, item=Item(name=TART))\"",

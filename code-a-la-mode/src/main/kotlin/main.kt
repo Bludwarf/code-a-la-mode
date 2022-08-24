@@ -575,17 +575,21 @@ class ActionsResolver(val gameState: GameState) {
     fun nextActionFrom(gameState: GameState): Action {
         val playerItem = gameState.player.item
 
-        // TODO il faut aussi traiter le cas d'urgence quand on a une tarte
-
-        val ovenThatContainsCroissant = gameState.getOvenThatContains(Item.CROISSANT)
-        if (ovenThatContainsCroissant != null) {
-            return when (playerItem) {
-                null -> use(ovenThatContainsCroissant)
-                else -> dropPlayerItem("Drop item to get ${Item.CROISSANT.name} before it burns!")
+        if (gameState.ovenContents != null) {
+            val ovenContents = gameState.ovenContents
+            if (canBeTakenOutOfOven(ovenContents)) {
+                return when (playerItem) {
+                    null -> use(Equipment.OVEN)
+                    else -> dropPlayerItem("Drop item to get ${Item.CROISSANT.name} before it burns!")
+                }
             }
         }
 
         return serveBestCustomer(customers, ::dropPlayerItem)
+    }
+
+    private fun canBeTakenOutOfOven(ovenContents: Item): Boolean {
+        return recipeBook.needToBeBakedByOven(ovenContents)
     }
 
     private fun serveBestCustomer(customers: List<Customer>, fallbackActionSupplier: Supplier<Action>): Action {
@@ -734,7 +738,7 @@ class ActionsResolver(val gameState: GameState) {
 
     private fun canBeUsed(equipment: Equipment): Boolean {
         return when (equipment) {
-            is Oven -> gameState.ovenContents == null
+            is Oven -> gameState.ovenContents == null || canBeTakenOutOfOven(gameState.ovenContents)
             else -> true
         }
     }
@@ -797,6 +801,12 @@ class RecipeBook {
         val fallbackValue = emptyList<Step>()
         val stepsToPrepare = stepsToPrepare(item, fallbackValue)
         return stepsToPrepare !== fallbackValue
+    }
+
+    fun needToBeBakedByOven(item: Item): Boolean {
+        val fallbackValue = emptyList<Step>()
+        val stepsToPrepare = stepsToPrepare(item, fallbackValue)
+        return stepsToPrepare.any { step -> step is Step.WaitForItemInOven && step.item == item }
     }
 }
 
