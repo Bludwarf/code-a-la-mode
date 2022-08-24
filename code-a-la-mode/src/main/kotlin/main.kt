@@ -606,7 +606,7 @@ class ActionsResolver(val gameState: GameState) {
     data class ActionToServeCustomer(val action: Action, val customer: Customer)
 
     fun estimateAward(actionToServeCustomer: ActionToServeCustomer): Int {
-        // TODO
+        if (actionToServeCustomer.action is Action.Wait) return 0
         return actionToServeCustomer.customer.award
     }
 
@@ -656,10 +656,10 @@ class ActionsResolver(val gameState: GameState) {
         return true
     }
 
-    fun dropPlayerItem(comment: String = "dropPlayerItem"): Action {
+    private fun dropPlayerItem(comment: String = "Drop item", desiredPosition: Position = player.position): Action {
         return if (recipeBook.contains(player.item!!)) {
             val nextEmptyTable =
-                gameState.findEmptyTablesNextTo(player.position).firstOrNull() ?: TODO("Search for empty table")
+                gameState.findEmptyTablesNextTo(desiredPosition).firstOrNull() ?: TODO("Search for empty table")
             use(nextEmptyTable, comment)
         } else {
             use(Equipment.WINDOW, comment)
@@ -725,10 +725,23 @@ class ActionsResolver(val gameState: GameState) {
     }
 
     fun use(equipment: Equipment, comment: String = "Use ${equipment.name}"): Action {
+        if (!canBeUsed(equipment)) {
+            if (player.item == null) throw EquipmentCannotBeUsed(equipment)
+            return dropPlayerItem(desiredPosition = kitchen.getPositionOf(equipment))
+        }
         return Action.Use(kitchen.getPositionOf(equipment), comment)
     }
 
+    private fun canBeUsed(equipment: Equipment): Boolean {
+        return when (equipment) {
+            is Oven -> gameState.ovenContents == null
+            else -> true
+        }
+    }
+
 }
+
+class EquipmentCannotBeUsed(equipment: Equipment) : Throwable("${equipment.name} cannot be used")
 
 class PlayerHasAlreadyAnItem : Throwable("Player has already an item")
 
