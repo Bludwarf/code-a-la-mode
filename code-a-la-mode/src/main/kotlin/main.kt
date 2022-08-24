@@ -674,7 +674,7 @@ class ActionsResolver(val gameState: GameState) {
         return if (item.isBase) {
             val stepsToPrepare = recipeBook.stepsToPrepare(item)
             val lastDoneStepIndex = stepsToPrepare.indexOfLast { step -> step.isDone(gameState) }
-            val nextStepToDo = if (lastDoneStepIndex < stepsToPrepare.size - 1) stepsToPrepare[lastDoneStepIndex + 1] else return Action.Wait("Recipe completed !?")
+            val nextStepToDo = if (lastDoneStepIndex < stepsToPrepare.size - 1) stepsToPrepare[lastDoneStepIndex + 1] else return dropPlayerItem("Recipe completed ?!")
             when (nextStepToDo) {
                 is Step.GetSome -> get(nextStepToDo.item)
                 is Step.Transform -> use(nextStepToDo.equipment)

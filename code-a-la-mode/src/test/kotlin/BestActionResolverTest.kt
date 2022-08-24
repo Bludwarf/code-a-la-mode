@@ -12,7 +12,7 @@ internal class BestActionResolverTest {
     @ParameterizedTest
     @CsvSource(
         "ligue2/game-2362403142607370200-state-1.txt, USE 8 3, Use STRAWBERRIES_CRATE",
-        "ligue2/game-2362403142607370200-state-7.txt, USE 5 6, Drop item",
+        "ligue2/game-2362403142607370200-state-7.txt, USE 3 0, Recipe completed ?!", // On s'est retrouvé dans un état incohérent en plein assemblage
         "ligue2/game-2362403142607370200-state-45.txt, USE 8 4, \"Got some CHOPPED_STRAWBERRIES on table Table(position=8 4, item=Item(name=CHOPPED_STRAWBERRIES))\"",
         "ligue3/game-7942577706886182900-state-28.txt, USE 9 0, Use STRAWBERRIES_CRATE",
         "ligue3/game-7942577706886182900-state-88.txt, USE 0 3, Drop item to get CROISSANT before it burns!",
