@@ -25,6 +25,7 @@ internal class BestActionResolverTest {
         "ligueBronze/game-7942577706886182900-state-129.txt, USE 2 4, \"Got some TART on table Table(position=2 4, item=Item(name=TART))\"",
         "ligueBronze/game--8170461584516249600-state-37.txt, USE 3 4, \"Got some DISH-BLUEBERRIES-ICE_CREAM-CHOPPED_STRAWBERRIES on table Table(position=3 4, item=Item(name=DISH-BLUEBERRIES-ICE_CREAM-CHOPPED_STRAWBERRIES))\"", // On récupère l'assiette déjà existante qui est compatible avec le 3e client
         "ligueBronze/game--2553030406430916600-state-219.txt, USE 0 1, Drop item", // Comme le four est déjà occupé et qu'on n'a plus aucun client qui ne nécessite pas d'utiliser le four, on dépose la pâte à côté du four
+        "ligueBronze/game--3228865474660574200-state-35.txt, USE 4 0, Drop item to get STRAWBERRIES", // Comme le four est déjà occupé pour 2 clients, on dépose son croissant pour aller découper des fraises pour le dernier client
         quoteCharacter = '"',
     )
     fun resolveBestAction(gameStatePath: String, expectedActionString: String, expectedActionComment: String) {

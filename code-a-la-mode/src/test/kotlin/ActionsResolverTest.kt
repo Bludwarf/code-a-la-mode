@@ -22,7 +22,7 @@ internal class ActionsResolverTest {
         val gameState = GameState(game, 200, player, Chef(Position(9, 3)), emptySet(), listOf(customer))
         val actionsResolver = ActionsResolver(gameState)
 
-        val action = actionsResolver.nextActionFrom(gameState)
+        val action = actionsResolver.nextAction()
 
         assertThat(action.command).isEqualTo(expectedActionCommand)
     }

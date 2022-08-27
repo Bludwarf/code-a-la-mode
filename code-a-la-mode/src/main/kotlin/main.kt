@@ -1,7 +1,6 @@
 import java.io.OutputStream
 import java.io.PrintWriter
 import java.util.*
-import java.util.function.Function
 import java.util.function.Supplier
 import kotlin.math.abs
 import kotlin.math.pow
@@ -559,7 +558,7 @@ class BestActionResolver {
 
     fun resolveBestActionFrom(gameState: GameState): Action {
         val actionsResolver = ActionsResolver(gameState)
-        return actionsResolver.nextActionFrom(gameState)
+        return actionsResolver.nextAction()
     }
 
 }
@@ -572,7 +571,7 @@ class ActionsResolver(val gameState: GameState) {
     private val useWindow = use(Equipment.WINDOW)
     private val recipeBook = RecipeBook()
 
-    fun nextActionFrom(gameState: GameState): Action {
+    fun nextAction(): Action {
         val playerItem = gameState.player.item
 
         if (gameState.ovenContents != null) {
@@ -634,7 +633,8 @@ class ActionsResolver(val gameState: GameState) {
         val equipment = kitchen.getEquipmentThatProvides(item)
         if (equipment != null) {
             if (!playerIsAllowedToUse(equipment)) {
-                throw PlayerHasAlreadyAnItem()
+                return dropPlayerItem("Drop item to get ${item.name}")
+//                throw PlayerHasAlreadyAnItem()
             }
             return use(equipment)
         }
@@ -720,7 +720,15 @@ class ActionsResolver(val gameState: GameState) {
     private fun prepareFirstMissingBaseItemOr(baseItems: List<Item>, alreadyPreparedBaseItems: List<Item>, nextActionFromMissingBaseItemsFunction: (List<Item>) -> Action): Action {
         val missingBaseItems = (baseItems - alreadyPreparedBaseItems.toSet())
         val missingBaseItemsToPrepare = missingBaseItems.filter { baseItem -> !gameState.contains(baseItem) }
-        if (missingBaseItemsToPrepare.isNotEmpty()) return prepare(missingBaseItemsToPrepare.first())
+        if (missingBaseItemsToPrepare.isNotEmpty()) {
+            if (gameState.ovenContents != null) {
+                val itemsThatDoNotNeedToBeBakedByOven = missingBaseItemsToPrepare.filter { !recipeBook.needToBeBakedByOven(it) }
+                if (itemsThatDoNotNeedToBeBakedByOven.isNotEmpty()) {
+                    return prepare(itemsThatDoNotNeedToBeBakedByOven.first())
+                }
+            }
+            return prepare(missingBaseItemsToPrepare.first())
+        }
         return nextActionFromMissingBaseItemsFunction(missingBaseItems)
     }
 
