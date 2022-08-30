@@ -718,6 +718,7 @@ class ActionsResolver(val gameState: GameState) {
         }
 
         return prepareFirstMissingBaseItemOr(baseItems, playerBaseItems) { missingBaseItems ->
+            // TODO on ne devrait pas prendre la DISH en 1er mais plutôt le 1er ingrédient, comme dans les recettes de base
             if (!playerBaseItems.contains(Item.DISH)) {
                 get(Item.DISH)
             } else {
@@ -848,6 +849,7 @@ class Simulator {
             }
 
             else -> {
+                // TODO il faudrait séparer la simulation d'une action et la simulation du passage d'un tour (turns--, ovenTimer-- et ovenContents)
                 gameState
             }
         }
@@ -898,6 +900,7 @@ class Simulator {
         action: Action.Move,
         stopNextToPosition: Boolean = false,
     ): GameState {
+        // FIXME ce n'est pas la bonne manière de faire, même si on attend sans bouger, les tours avancent, le four cuit et donc l'état n'est pas le même
         val stopCondition =
             if (stopNextToPosition) gameState.player.position.isNextTo(action.position) else gameState.player.position == action.position
         return if (stopCondition) {
