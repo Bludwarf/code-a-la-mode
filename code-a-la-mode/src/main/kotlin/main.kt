@@ -114,6 +114,16 @@ data class GameState(
             .filter { emptyTable -> emptyTable.isNextTo(position) }
     }
 
+    fun findClosestEmptyTablesTo(position: Position, pathFinder: PathFinder): List<Table> {
+        val adjacentEmptyTables = findEmptyTablesNextTo(position)
+        return adjacentEmptyTables.ifEmpty {
+            val possiblePaths = pathFinder.possiblePathsWhile(position, { findEmptyTablesNextTo(it).isEmpty() })
+            val minimumPathLength = possiblePaths.minOf { it.length }
+            val shorterPaths = possiblePaths.filter { it.length == minimumPathLength }
+            shorterPaths.flatMap { findClosestEmptyTablesTo(it.end, pathFinder) }
+        }
+    }
+
 }
 
 fun debug(message: Any) {
@@ -570,6 +580,7 @@ class ActionsResolver(val gameState: GameState) {
     private val customers get() = gameState.customers
     private val useWindow = use(Equipment.WINDOW)
     private val recipeBook = RecipeBook()
+    private val pathFinder = PathFinder(gameState)
 
     fun nextAction(): Action {
         val playerItem = gameState.player.item
@@ -662,8 +673,7 @@ class ActionsResolver(val gameState: GameState) {
 
     private fun dropPlayerItem(comment: String = "Drop item", desiredPosition: Position = player.position): Action {
         return if (recipeBook.contains(player.item!!)) {
-            val nextEmptyTable =
-                gameState.findEmptyTablesNextTo(desiredPosition).firstOrNull() ?: TODO("Search for empty table")
+            val nextEmptyTable = gameState.findClosestEmptyTablesTo(desiredPosition, pathFinder).firstOrNull() ?: throw CannotFindEmptyTables()
             use(nextEmptyTable, comment)
         } else {
             use(Equipment.WINDOW, comment)
@@ -752,6 +762,8 @@ class ActionsResolver(val gameState: GameState) {
     }
 
 }
+
+class CannotFindEmptyTables : Throwable("Cannot find any empty tables")
 
 class EquipmentCannotBeUsed(equipment: Equipment) : Throwable("${equipment.name} cannot be used")
 
@@ -1004,8 +1016,20 @@ class PathFinder(private val gameState: GameState) {
         position: Position,
         target: Position,
         path: Path = Path(listOf(gameState.player.position)),
+    ) = possiblePathsWhile(position, { it != target }, path)
+
+    fun nextEmptyPositions(position: Position): Set<Position> {
+        return position.adjacentPositions()
+            .filter(gameState::isEmpty)
+            .toSet()
+    }
+
+    fun possiblePathsWhile(
+        position: Position,
+        whileCondition: (Position) -> Boolean,
+        path: Path = Path(listOf(gameState.player.position)),
     ): List<Path> {
-        if (position == target) {
+        if (!whileCondition(position)) {
             return listOf(path)
         }
         val nextPositions = nextEmptyPositions(position) - path.positions.toSet()
@@ -1014,16 +1038,17 @@ class PathFinder(private val gameState: GameState) {
         } else {
             nextPositions
                 .map { nextPosition -> path.copy(positions = path.positions + nextPosition) }
-                .flatMap { nextPath -> possiblePaths(nextPath.end, target, nextPath) }
+                .flatMap { nextPath -> possiblePathsWhile(nextPath.end, whileCondition, nextPath) }
         }
     }
 
-    private fun nextEmptyPositions(position: Position): Set<Position> {
-        return position.adjacentPositions()
-            .filter(gameState::isEmpty)
-            .toSet()
+    fun distance(position: Position, target: Position): Int {
+        val path = findPath(position, target) ?: throw CannotFindPathException(position, target)
+        return path.size
     }
 }
+
+class CannotFindPathException(position: Position, target: Position) : Exception("Cannot find path from $position to $target")
 
 data class Path(val positions: List<Position>) : List<Position> by positions {
     fun minDistanceWith(target: Position): Double {
@@ -1031,6 +1056,7 @@ data class Path(val positions: List<Position>) : List<Position> by positions {
     }
 
     val end: Position get() = positions.last()
+    val length: Int get() = positions.size - 1
 
     fun subPath(maxDistance: Int): Path {
         return copy(
