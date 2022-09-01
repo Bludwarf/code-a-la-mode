@@ -5,12 +5,15 @@ import org.junit.jupiter.api.Test
 internal class RecipeBookTest {
 
     @Test
-    fun actionsToPrepare() {
+    fun stepsToPrepareBaseItem() {
         val recipeBook = RecipeBook()
-        val itemToPrepare = Item("CHOPPED_STRAWBERRIES")
+        val itemToPrepare = Item.CHOPPED_STRAWBERRIES
 
-        val actions = recipeBook.stepsToPrepare(itemToPrepare)
+        val actions = recipeBook.stepsToPrepareBaseItem(itemToPrepare)
 
-        assertThat(actions).containsExactly(Step.GetSome(Item("STRAWBERRIES")))
+        assertThat(actions).containsExactly(
+            Step.GetSome(Item.STRAWBERRIES),
+            Step.Transform(Item.STRAWBERRIES, Equipment.CHOPPING_BOARD, Item.CHOPPED_STRAWBERRIES),
+        )
     }
 }

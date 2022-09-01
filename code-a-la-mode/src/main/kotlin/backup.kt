@@ -1,0 +1,171 @@
+
+class Simulator {
+    fun simulate(gameState: GameState, action: Action): GameState {
+        return when (action) {
+            is Action.Use -> {
+                simulate(gameState, action)
+            }
+
+            is Action.Move -> {
+                simulate(gameState, action)
+            }
+
+            is Action.Wait -> {
+                wait(gameState)
+            }
+
+            else -> {
+                // TODO il faudrait séparer la simulation d'une action et la simulation du passage d'un tour (turns--, ovenTimer-- et ovenContents)
+                gameState
+            }
+        }
+    }
+
+    private fun simulate(gameState: GameState, action: Action.Use): GameState {
+        val position = action.position
+        if (gameState.player.position.isNextTo(position)) {
+
+            val table = gameState.getTableAt(position)
+            if (table != null) {
+                return simulateUse(table, gameState)
+            }
+
+            val equipment = gameState.kitchen.getEquipmentAt(position)
+            if (equipment != null) {
+                if (equipment == Equipment.DISHWASHER) {
+                    return simulateUseDishwasher(gameState)
+                } else if (equipment == Equipment.CHOPPING_BOARD) {
+                    return simulateUseChoppingBoard(gameState)
+                } else if (equipment == Equipment.WINDOW) {
+                    return simulateUseWindow(gameState)
+                } else if (equipment is ItemProvider) {
+                    return simulateUse(equipment, gameState)
+                }
+            }
+
+            TODO("simulate $action")
+        } else {
+            return simulate(gameState, Action.Move(position, action.comment), stopNextToPosition = true)
+        }
+    }
+
+    private fun simulateUse(table: Table, gameState: GameState): GameState {
+        val player = gameState.player
+        val tableItem = table.item ?: return gameState
+        return gameState.copy(
+            turnsRemaining = gameState.turnsRemaining - 1,
+            tablesWithItem = gameState.tablesWithItem - table,
+            player = if (player.item == null) player else player.copy(
+                item = player.item.with(tableItem)
+            )
+        )
+    }
+
+    private fun simulate(
+        gameState: GameState,
+        action: Action.Move,
+        stopNextToPosition: Boolean = false,
+    ): GameState {
+        // FIXME ce n'est pas la bonne manière de faire, même si on attend sans bouger, les tours avancent, le four cuit et donc l'état n'est pas le même
+        val stopCondition =
+            if (stopNextToPosition) gameState.player.position.isNextTo(action.position) else gameState.player.position == action.position
+        return if (stopCondition) {
+            gameState
+        } else {
+            val player = gameState.player
+            if (player.position == action.position) {
+                gameState
+            } else if (player.position.isNextTo(action.position)) {
+                gameState.copy(
+                    turnsRemaining = gameState.turnsRemaining - 1,
+                    player = player.copy(
+                        position = action.position
+                    )
+                )
+            } else {
+                val pathFinder = PathFinder(gameState)
+                val path = pathFinder.findPath(player.position, action.position)
+                if (path == null) {
+                    gameState
+                } else {
+                    val nextPlayerPosition = path.subPath(4).lastOrNextOf(action.position)
+                    gameState.copy(
+                        turnsRemaining = gameState.turnsRemaining - 1,
+                        player = player.copy(
+                            position = nextPlayerPosition
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private fun simulateUseDishwasher(gameState: GameState): GameState {
+        val player = gameState.player
+        val playerHasDish = player.item == Item.DISH
+        return if (playerHasDish) {
+            gameState
+        } else {
+            grabDishFromDishwasher(gameState)
+        }
+    }
+
+    private fun simulateUseChoppingBoard(gameState: GameState): GameState {
+        return if (gameState.player.item == Item.STRAWBERRIES) {
+            gameState.copy(
+                turnsRemaining = gameState.turnsRemaining - 1,
+                player = gameState.player.copy(
+                    item = Item.CHOPPED_STRAWBERRIES
+                ),
+            )
+        } else {
+            gameState
+        }
+    }
+
+    private fun simulateUseWindow(gameState: GameState): GameState {
+        val player = gameState.player
+        val customerThatWantPlayerItem =
+            gameState.customers.firstOrNull { customer -> customer.item == player.item }
+        return if (customerThatWantPlayerItem != null) {
+            gameState.copy(
+                turnsRemaining = gameState.turnsRemaining - 1,
+                player = player.copy(
+                    item = null
+                ),
+                customers = gameState.customers - customerThatWantPlayerItem,
+                playerScore = gameState.playerScore + customerThatWantPlayerItem.award,
+            )
+        } else {
+            gameState
+        }
+    }
+
+    private fun simulateUse(equipment: ItemProvider, gameState: GameState): GameState {
+        // FIXME on ne peut pas prendre une fraise quand on a une assiette (cf message d'erreur : bludwarf: Cannot take Dish(contents=[ICE_CREAM, BLUEBERRIES]) while holding STRAWBERRIES!)
+        return gameState.copy(
+            turnsRemaining = gameState.turnsRemaining - 1,
+            player = gameState.player.copy(
+                item = if (gameState.player.item == null) equipment.providedItem else gameState.player.item.with(
+                    equipment.providedItem
+                )
+            )
+        )
+    }
+
+    private fun grabDishFromDishwasher(gameState: GameState): GameState {
+        return gameState.copy(
+            turnsRemaining = gameState.turnsRemaining - 1,
+            player = gameState.player.copy(
+                item = Item.DISH
+            )
+        )
+    }
+
+    private fun wait(gameState: GameState): GameState {
+        return gameState.copy(
+            turnsRemaining = gameState.turnsRemaining - 1,
+        )
+    }
+
+}

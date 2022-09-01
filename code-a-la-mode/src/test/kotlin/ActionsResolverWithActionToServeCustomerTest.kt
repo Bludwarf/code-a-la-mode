@@ -7,7 +7,7 @@ const val USE_OVEN = "USE 0 5"
 const val DROP_ITEM = "USE 2 2"
 const val USE_DOUGH_CRATE = "USE 8 3"
 
-internal class ActionsResolverTest {
+internal class ActionsResolverWithActionToServeCustomerTest {
 
     @ParameterizedTest
     @CsvSource(
@@ -20,7 +20,7 @@ internal class ActionsResolverTest {
         val customer = Customer(Item(customerItemName), 1200)
         val player = Chef(Position(1, 3), if (playerItemName != "NONE") Item(playerItemName) else null)
         val gameState = GameState(game, 200, player, Chef(Position(9, 3)), emptySet(), listOf(customer))
-        val actionsResolver = ActionsResolver(gameState)
+        val actionsResolver = ActionsResolverWithActionToServeCustomer(gameState)
 
         val action = actionsResolver.nextAction()
 
