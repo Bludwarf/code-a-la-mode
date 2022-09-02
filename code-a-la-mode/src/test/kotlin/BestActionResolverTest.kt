@@ -1,5 +1,3 @@
-
-
 import TestUtils.Companion.action
 import TestUtils.Companion.gameState
 import org.apache.commons.lang3.StringUtils

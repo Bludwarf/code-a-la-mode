@@ -20,6 +20,7 @@ internal class ActionsResolverWithActionToServeCustomerTest {
         val customer = Customer(Item(customerItemName), 1200)
         val player = Chef(Position(1, 3), if (playerItemName != "NONE") Item(playerItemName) else null)
         val gameState = GameState(game, 200, player, Chef(Position(9, 3)), emptySet(), listOf(customer))
+        val playerState = PlayerState()
         val actionsResolver = ActionsResolverWithActionToServeCustomer(gameState)
 
         val action = actionsResolver.nextAction()

@@ -169,3 +169,61 @@ class Simulator {
     }
 
 }
+
+class ActionsResolverItemFocused(gameState: GameState, private val playerState: PlayerState) : ActionsResolver(gameState) {
+    override fun nextAction(): Action {
+        // On doit d'abord décider si on est en mode préparation ou assemblage ou sauvetage anti-cram !
+
+        debug("ovenContents : $ovenContents")
+        if (ovenContents != null && canBeTakenOutOfOven(ovenContents)) {
+            return takeItemOutOfOven(ovenContents)
+        }
+
+        if (playerState.mode == PlayerStateMode.WAITING) {
+            val items = customers.flatMap { it.item.baseItems.toSet() - Item.DISH } .toSet()
+            if (items.contains(Item.TART)) {
+                val stepNode = StepNode(Step.GetSome(Item.TART))
+                debug("stepNode = $stepNode")
+                val stepNodeExpander = StepNodeExpander(gameState)
+                val expandedNode = stepNodeExpander.expand(stepNode)
+                debug("expandedNode = $expandedNode")
+            }
+            debug("items : $items")
+        }
+
+        return Action.Wait("What to do ?") // TODO
+    }
+
+}
+
+data class PlayerState(val mode: PlayerStateMode = PlayerStateMode.WAITING, val remainingSteps: List<Step> = emptyList()) {
+
+
+}
+
+enum class PlayerStateMode {
+    WAITING,
+    TAKING_ITEM_OUT_OF_OVEN,
+}
+
+data class StepNode(val step: Step, val children: Set<StepNode> = emptySet()) {
+    val hasChildren get() = children.isNotEmpty()
+    val isLeaf get() = children.isEmpty()
+}
+
+class StepNodeExpander(val gameState: GameState) {
+    fun expand(node: StepNode): StepNode {
+        if (node.hasChildren) return node
+
+        val step = node.step
+        if (step is Step.GetSome) {
+            if (gameState.contains(step.item)) {
+                return node
+            } else {
+                // TODO plusieurs combinaison possible
+            }
+        }
+
+        TODO("Cannot expand node $node")
+    }
+}
