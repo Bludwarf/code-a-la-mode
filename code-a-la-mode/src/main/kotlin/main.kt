@@ -89,6 +89,16 @@ data class GameState(
         return position != player.position && position != partner.position && kitchen.isEmpty(position)
     }
 
+    /**
+     * Toutes les assiettes différentes en jeu
+     */
+    val dishes: Set<Item> by lazy {
+        val dishes = tablesWithDish.map { it.item!! }.toMutableList()
+        if (player.item != null && player.item.contains(Item.DISH)) dishes += player.item
+        if (dishes.size < 3) dishes += Item.DISH
+        dishes.toSet()
+    }
+
     private val emptyTables: Set<Table> get() = game.kitchen.tables - tablesWithItem
 
     val kitchen: Kitchen
@@ -96,9 +106,13 @@ data class GameState(
 
     fun contains(item: Item): Boolean {
         val chefs = setOf(player) // TODO faut-il inclure le partner ?
-        return chefs.any { chef -> chef.contains(item) } || findTableWith(item) != null || kitchen.getEquipmentThatProvides(
+        return chefs.any { chef -> chef.has(item) } || findTableWith(item) != null || kitchen.getEquipmentThatProvides(
             item
         ) != null
+    }
+
+    fun doesNotContain(item: Item): Boolean {
+        return !contains(item)
     }
 
     fun getOvenThatContains(item: Item?): Oven? {
@@ -147,6 +161,10 @@ data class GameState(
 
 fun debug(message: Any) {
     System.err.println(message.toString())
+}
+
+fun debug(elements: Collection<Any>) {
+    elements.forEach { debug("- $it") }
 }
 
 @JvmInline
@@ -400,6 +418,8 @@ data class Item(val name: String) {
         )
     val isBase get() = !name.contains("-")
 
+    override fun toString(): String = name
+
     companion object {
         val NONE = Item("NONE")
         val DISH = Item("DISH")
@@ -608,7 +628,7 @@ class ItemProviderNotFoundException(item: Item) : Exception("Cannot find provide
 class BestActionResolver {
 
     fun resolveBestActionFrom(gameState: GameState): Action {
-        val actionsResolver: ActionsResolver = ActionsResolverWithActionToServeCustomer(gameState)
+        val actionsResolver: ActionsResolver = ActionsResolverInspiredByTeccles(gameState)
         return actionsResolver.nextAction()
     }
 
@@ -690,6 +710,11 @@ abstract class ActionsResolver(protected val gameState: GameState) {
             return playerIsAllowedToGrab(equipment.providedItem)
         }
         return true
+    }
+
+    protected fun distanceFromPlayerTo(item: Item): Int {
+        val position = gameState.getPositionOf(item)
+        return pathFinder.distance(player.position, position)
     }
 
 }
@@ -898,7 +923,7 @@ class ActionsResolverWithActionToServeCustomer(gameState: GameState) : ActionsRe
                     Comparator.comparing<Item, Int> { item -> inGameComparingValue(item) }
                         .thenComparing { item ->
                             try {
-                                distanceFromPlayer(item)
+                                distanceFromPlayerTo(item)
                             } catch (e: Throwable) {
                                 Int.MAX_VALUE
                             }
@@ -924,11 +949,6 @@ class ActionsResolverWithActionToServeCustomer(gameState: GameState) : ActionsRe
         return if (gameState.contains(item)) 1 else -1
     }
 
-    private fun distanceFromPlayer(item: Item): Int {
-        val position = gameState.getPositionOf(item)
-        return pathFinder.distance(player.position, position)
-    }
-
     private fun checkMissingBaseItemsAndThen(
         baseItems: Set<Item>,
         alreadyPreparedBaseItems: Set<Item>,
@@ -952,6 +972,137 @@ class ActionsResolverWithActionToServeCustomer(gameState: GameState) : ActionsRe
         val producedItem = cookBook.producedItemAfterBaking(ovenContents)
         return producedItem == lastMissingBaseItemToPrepare
     }
+}
+
+class ActionsResolverInspiredByTeccles(gameState: GameState) : ActionsResolver(gameState) {
+    override fun nextAction(): Action {
+
+        val sortedCustomersWithDishes = allCustomersWithAllDishes.sortedWith(Comparator
+            .comparing<CustomerWithDish?, Int?> { customerWithDish ->
+                customerWithDish.missingItems.size
+            }
+            .thenComparing(Comparator.comparing<CustomerWithDish?, Int?> { customerWithDish ->
+                customerWithDish.customer.award
+            }.reversed())
+        )
+        debug(sortedCustomersWithDishes)
+        sortedCustomersWithDishes.forEach {
+            debug("---")
+            debug(it.missingItems)
+        }
+
+        val firstCustomerWithDish = sortedCustomersWithDishes.firstOrNull() ?: return Action.Wait("No more customers")
+        return serve(firstCustomerWithDish)
+    }
+
+    private fun serve(customerWithDish: CustomerWithDish): Action {
+
+        val sortedMissingItems = customerWithDish.missingItems.sortedWith(kotlin.Comparator
+            .comparing { missingItem -> missingItem.baseItems.size } // DEBUG juste pour DEBUG
+        )
+
+        val firstMissingItem = sortedMissingItems.firstOrNull() ?: return assembleFor(customerWithDish)
+        return prepare(firstMissingItem)
+    }
+
+    private fun prepare(item: Item): Action {
+        val stepsToPrepare = cookBook.stepsToPrepare(item)
+        val lastDoneStepIndex = stepsToPrepare.indexOfLast { step -> step.isDone(gameState) }
+        val nextStep =
+            if (lastDoneStepIndex < stepsToPrepare.size - 1) stepsToPrepare[lastDoneStepIndex + 1] else return Action.Wait(
+                "Recipe completed ?!"
+            )
+        return when (nextStep) {
+            is Step.GetSome -> if (gameState.contains(nextStep.item)) get(nextStep.item) else prepare(nextStep.item)
+            is Step.Transform -> use(nextStep.equipment)
+            is Step.PutInOven -> use(Equipment.OVEN)
+            is Step.WaitForItemInOven -> if (player.isNextTo(kitchen.getPositionOf(Equipment.OVEN))) Action.Wait("Waiting for oven to bake ${nextStep.item}") else use(
+                Equipment.OVEN,
+                "Moving to oven"
+            )
+
+            is Step.GetFromOven -> use(Equipment.OVEN)
+            else -> Action.Wait("Cannot translate step into actions : $nextStep")
+        }
+    }
+
+    private fun get(item: Item, actionOnMissingBaseItem: (Item) -> Action = ::prepare): Action {
+        val tableWithItem = gameState.findTableWith(item)
+        if (tableWithItem != null) {
+            if (!playerIsAllowedToGrab(tableWithItem.item!!)) {
+                if (player.isNextTo(tableWithItem)) {
+                    return dropPlayerItem("Drop to get $item")
+                }
+            }
+            return use(tableWithItem)
+        }
+
+        val equipment = kitchen.getEquipmentThatProvides(item)
+        if (equipment != null) {
+            if (!playerIsAllowedToUse(equipment)) {
+                if (player.isNextTo(kitchen.getPositionOf(equipment))) {
+                    return dropPlayerItem("Drop to get $item")
+                }
+            }
+            return use(equipment)
+        }
+
+        return actionOnMissingBaseItem(item)
+    }
+
+    private fun assembleFor(customerWithDish: CustomerWithDish): Action {
+
+        val remainingItems = with(customerWithDish) {
+            if (player.item != null) {
+                if (player.item == dish) {
+                    missingItemsInDish
+                } else {
+                    setOf(dish)
+                }
+            } else {
+                setOf(dish) + missingItemsInDish
+            }
+        }.sortedWith(Comparator.comparing {
+            distanceFromPlayerTo(it)
+        })
+
+        debug("remainingItems :")
+        debug(remainingItems)
+        val nextItem = remainingItems.firstOrNull() ?: return useWindow
+        return get(nextItem)
+    }
+
+    private val allCustomersWithAllDishes by lazy {
+        customers.flatMap { customer ->
+            gameState.dishes
+                .filter { dish -> dish.isCompatibleWith(customer.item) }
+                .map { dish ->
+                    CustomerWithDish(customer, dish)
+                }
+        }
+    }
+
+    inner class CustomerWithDish(val customer: Customer, val dish: Item) {
+
+        val missingItems: Set<Item> by lazy {
+            missingItemsInDish
+                .filter(gameState::doesNotContain)
+                .toSet()
+        }
+
+        private val index: Int by lazy {
+            customers.indexOf(customer)
+        }
+
+        val missingItemsInDish: Set<Item> by lazy {
+            customer.item.baseItems - dish.baseItems
+        }
+
+        override fun toString(): String {
+            return "Customer #${index + 1} with $dish"
+        }
+    }
+
 }
 
 class CannotFindEmptyTables : Throwable("Cannot find any empty tables")
