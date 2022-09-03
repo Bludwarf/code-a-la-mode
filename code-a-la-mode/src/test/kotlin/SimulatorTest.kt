@@ -49,7 +49,7 @@ internal class SimulatorTest {
 
         val gameState11 = simulator.simulate(gameState10, action)
         assertThat(gameState11.player.position).isEqualTo(Position(4, 4))
-        assertThat(gameState11.player.item).isEqualTo(DISH.with(ICE_CREAM))
+        assertThat(gameState11.player.item).isEqualTo(DISH + ICE_CREAM)
 
     }
 
