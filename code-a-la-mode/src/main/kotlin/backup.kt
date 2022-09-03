@@ -1,5 +1,18 @@
-
 class Simulator {
+    fun simulateWhile(
+        initialGameState: GameState,
+        whileCondition: (GameState) -> Boolean,
+        gameStateFunction: (GameState) -> GameState,
+    ): GameState {
+        var gameState = initialGameState
+        while (whileCondition(gameState)) {
+            val turnsRemaining = gameState.turnsRemaining
+            gameState = gameStateFunction(gameState)
+            if (gameState.turnsRemaining == turnsRemaining) TODO("Le simulateur n'a pas fait avancer le tour $turnsRemaining");
+        }
+        return gameState
+    }
+
     fun simulate(gameState: GameState, action: Action): GameState {
         return when (action) {
             is Action.Use -> {
@@ -51,14 +64,32 @@ class Simulator {
 
     private fun simulateUse(table: Table, gameState: GameState): GameState {
         val player = gameState.player
-        val tableItem = table.item ?: return gameState
-        return gameState.copy(
-            turnsRemaining = gameState.turnsRemaining - 1,
-            tablesWithItem = gameState.tablesWithItem - table,
-            player = if (player.item == null) player else player.copy(
-                item = player.item.with(tableItem)
-            )
+
+        val nextGameState = gameState.copy(
+            turnsRemaining = gameState.turnsRemaining - 1
         )
+
+        if (table.item == null) {
+            if (player.item == null) {
+                return nextGameState
+            }
+            val tableWithItem = table.copy(
+                item = player.item
+            )
+            return nextGameState.copy(
+                tablesWithItem = gameState.tablesWithItem + tableWithItem,
+                player = player.copy(
+                    item = null
+                )
+            )
+        } else {
+            return nextGameState.copy(
+                tablesWithItem = gameState.tablesWithItem - table,
+                player = if (player.item == null) player else player.copy(
+                    item = player.item + table.item!!
+                )
+            )
+        }
     }
 
     private fun simulate(
@@ -66,18 +97,19 @@ class Simulator {
         action: Action.Move,
         stopNextToPosition: Boolean = false,
     ): GameState {
-        // FIXME ce n'est pas la bonne manière de faire, même si on attend sans bouger, les tours avancent, le four cuit et donc l'état n'est pas le même
         val stopCondition =
             if (stopNextToPosition) gameState.player.position.isNextTo(action.position) else gameState.player.position == action.position
+        val nextTurnGameState = gameState.copy(
+            turnsRemaining = gameState.turnsRemaining - 1,
+        )
         return if (stopCondition) {
-            gameState
+            nextTurnGameState
         } else {
             val player = gameState.player
             if (player.position == action.position) {
-                gameState
+                nextTurnGameState
             } else if (player.position.isNextTo(action.position)) {
-                gameState.copy(
-                    turnsRemaining = gameState.turnsRemaining - 1,
+                nextTurnGameState.copy(
                     player = player.copy(
                         position = action.position
                     )
@@ -86,11 +118,10 @@ class Simulator {
                 val pathFinder = PathFinder(gameState)
                 val path = pathFinder.findPath(player.position, action.position)
                 if (path == null) {
-                    gameState
+                    nextTurnGameState
                 } else {
                     val nextPlayerPosition = path.subPath(4).lastOrNextOf(action.position)
-                    gameState.copy(
-                        turnsRemaining = gameState.turnsRemaining - 1,
+                    nextTurnGameState.copy(
                         player = player.copy(
                             position = nextPlayerPosition
                         )
@@ -137,7 +168,9 @@ class Simulator {
                 playerScore = gameState.playerScore + customerThatWantPlayerItem.award,
             )
         } else {
-            gameState
+            gameState.copy(
+                turnsRemaining = gameState.turnsRemaining - 1,
+            )
         }
     }
 
@@ -146,9 +179,7 @@ class Simulator {
         return gameState.copy(
             turnsRemaining = gameState.turnsRemaining - 1,
             player = gameState.player.copy(
-                item = if (gameState.player.item == null) equipment.providedItem else gameState.player.item.with(
-                    equipment.providedItem
-                )
+                item = if (gameState.player.item == null) equipment.providedItem else gameState.player.item + equipment.providedItem
             )
         )
     }
@@ -170,7 +201,8 @@ class Simulator {
 
 }
 
-class ActionsResolverItemFocused(gameState: GameState, private val playerState: PlayerState) : ActionsResolver(gameState) {
+class ActionsResolverItemFocused(gameState: GameState, private val playerState: PlayerState) :
+    ActionsResolver(gameState) {
     override fun nextAction(): Action {
         // On doit d'abord décider si on est en mode préparation ou assemblage ou sauvetage anti-cram !
 
@@ -180,7 +212,7 @@ class ActionsResolverItemFocused(gameState: GameState, private val playerState: 
         }
 
         if (playerState.mode == PlayerStateMode.WAITING) {
-            val items = customers.flatMap { it.item.baseItems.toSet() - Item.DISH } .toSet()
+            val items = customers.flatMap { it.item.baseItems.toSet() - Item.DISH }.toSet()
             if (items.contains(Item.TART)) {
                 val stepNode = StepNode(Step.GetSome(Item.TART))
                 debug("stepNode = $stepNode")
@@ -196,7 +228,10 @@ class ActionsResolverItemFocused(gameState: GameState, private val playerState: 
 
 }
 
-data class PlayerState(val mode: PlayerStateMode = PlayerStateMode.WAITING, val remainingSteps: List<Step> = emptyList()) {
+data class PlayerState(
+    val mode: PlayerStateMode = PlayerStateMode.WAITING,
+    val remainingSteps: List<Step> = emptyList(),
+) {
 
 
 }

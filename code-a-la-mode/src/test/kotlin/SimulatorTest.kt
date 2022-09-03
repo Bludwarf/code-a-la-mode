@@ -1,10 +1,10 @@
-
 import Item.Companion.ICE_CREAM
-import Item.Companion.NONE
 import TestUtils.Companion.DISH
 import TestUtils.Companion.gameState
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 
 internal class SimulatorTest {
 
@@ -65,6 +65,58 @@ internal class SimulatorTest {
         assertThat(gameState24.player.position).isEqualTo(gameState23.player.position)
         assertThat(gameState24.customers).hasSize(gameState23.customers.size - 1)
 
+    }
+
+    @Test
+    fun simulateWhile_turnsRemaining() {
+        val gameState23 = gameState("ligue2/game-2362403142607370200-state-23.txt")
+        simulateUntilTheEnd(gameState23)
+    }
+
+    private fun simulateUntilTheEnd(initialGameState: GameState) {
+        val simulator = Simulator()
+        val resolver = BestActionResolver()
+        val writer = Writer(System.out)
+
+        val lastGameState =
+            simulator.simulateWhile(
+                initialGameState,
+                { it.customers.isNotEmpty() && it.turnsRemaining > 0 },
+                { gameState ->
+                    println()
+                    writer.write(gameState)
+                    writer.newLine()
+                    writer.flush()
+                    val action = resolver.resolveBestActionFrom(gameState)
+                    println(action)
+                    simulator.simulate(gameState, action)
+                })
+
+        println()
+        println("Last game state : ")
+        writer.write(lastGameState)
+        writer.newLine()
+        writer.flush()
+
+        println()
+        println("Player score  : ${lastGameState.playerScore} pts")
+        val elapsedTurns = initialGameState.turnsRemaining - lastGameState.turnsRemaining
+        println("Elapsed turns : $elapsedTurns turns")
+        println("Ratio : ${lastGameState.playerScore / elapsedTurns} pts / turn")
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        "0",
+        "1",
+        "2",
+    )
+    fun simulateWhile_turnsRemaining_client0(clientIndex: Int) {
+        val gameState23 = gameState("ligue2/game-2362403142607370200-state-23.txt")
+        val gameStateWithOnlyOneCustomer = gameState23.copy(
+            customers = gameState23.customers.subList(clientIndex, clientIndex + 1)
+        )
+        simulateUntilTheEnd(gameStateWithOnlyOneCustomer)
     }
 
 }

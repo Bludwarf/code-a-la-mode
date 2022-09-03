@@ -9,21 +9,21 @@ internal class BestActionResolverTest {
 
     @ParameterizedTest
     @CsvSource(
-        "ligue2/game-2362403142607370200-state-1.txt, USE 8 3, Use STRAWBERRIES_CRATE",
-        "ligue2/game-2362403142607370200-state-7.txt, USE 3 0, Recipe completed ?!", // On s'est retrouvé dans un état incohérent en plein assemblage
-        "ligue2/game-2362403142607370200-state-45.txt, USE 8 4, \"Got some CHOPPED_STRAWBERRIES on table Table(position=8 4, item=Item(name=CHOPPED_STRAWBERRIES))\"",
-        "ligue3/game-7942577706886182900-state-28.txt, USE 9 0, Use STRAWBERRIES_CRATE",
-        "ligue3/game-7942577706886182900-state-88.txt, USE 0 3, Drop item to get CROISSANT before it burns!",
-        "ligue3/game-7942577706886182900-state-193.txt, USE 0 4, Drop item",
-        "ligueBronze/game-7942577706886182900-state-5.txt, USE 2 3, Use CHOPPING_BOARD",
-        "ligueBronze/game-7942577706886182900-state-13.txt, USE 10 5, Use BLUEBERRIES_CRATE",
-        "ligueBronze/game-7942577706886182900-state-33.txt, USE 0 5, Use OVEN", // On retire la tarte cuite du four
-        "ligueBronze/game-7942577706886182900-state-121.txt, USE 5 0, Use DISHWASHER",
-        "ligueBronze/game-7942577706886182900-state-125.txt, USE 0 2, Use ICE_CREAM_CRATE",
-        "ligueBronze/game-7942577706886182900-state-129.txt, USE 2 4, \"Got some TART on table Table(position=2 4, item=Item(name=TART))\"",
-        "ligueBronze/game--8170461584516249600-state-37.txt, USE 3 4, \"Got some DISH-BLUEBERRIES-ICE_CREAM-CHOPPED_STRAWBERRIES on table Table(position=3 4, item=Item(name=DISH-BLUEBERRIES-ICE_CREAM-CHOPPED_STRAWBERRIES))\"", // On récupère l'assiette déjà existante qui est compatible avec le 3e client
-        "ligueBronze/game--2553030406430916600-state-219.txt, USE 0 1, Drop item", // Comme le four est déjà occupé et qu'on n'a plus aucun client qui ne nécessite pas d'utiliser le four, on dépose la pâte à côté du four
-        "ligueBronze/game--3228865474660574200-state-35.txt, USE 4 0, Drop item to get STRAWBERRIES", // Comme le four est déjà occupé pour 2 clients, on dépose son croissant pour aller découper des fraises pour le dernier client
+//        "ligue2/game-2362403142607370200-state-1.txt, USE 8 3, Use STRAWBERRIES_CRATE",
+//        "ligue2/game-2362403142607370200-state-7.txt, USE 3 0, Recipe completed ?!", // On s'est retrouvé dans un état incohérent en plein assemblage
+//        "ligue2/game-2362403142607370200-state-45.txt, USE 8 4, \"Got some CHOPPED_STRAWBERRIES on table Table(position=8 4, item=Item(name=CHOPPED_STRAWBERRIES))\"",
+//        "ligue3/game-7942577706886182900-state-28.txt, USE 9 0, Use STRAWBERRIES_CRATE",
+//        "ligue3/game-7942577706886182900-state-88.txt, USE 0 3, Drop item to get CROISSANT before it burns!",
+//        "ligue3/game-7942577706886182900-state-193.txt, USE 0 4, Drop item",
+//        "ligueBronze/game-7942577706886182900-state-5.txt, USE 2 3, Use CHOPPING_BOARD",
+//        "ligueBronze/game-7942577706886182900-state-13.txt, USE 10 5, Use BLUEBERRIES_CRATE",
+//        "ligueBronze/game-7942577706886182900-state-33.txt, USE 0 5, Use OVEN", // On retire la tarte cuite du four
+//        "ligueBronze/game-7942577706886182900-state-121.txt, USE 5 0, Use DISHWASHER",
+//        "ligueBronze/game-7942577706886182900-state-125.txt, USE 0 2, Use ICE_CREAM_CRATE",
+//        "ligueBronze/game-7942577706886182900-state-129.txt, USE 2 4, \"Got some TART on table Table(position=2 4, item=Item(name=TART))\"",
+//        "ligueBronze/game--8170461584516249600-state-37.txt, USE 3 4, \"Got some DISH-BLUEBERRIES-ICE_CREAM-CHOPPED_STRAWBERRIES on table Table(position=3 4, item=Item(name=DISH-BLUEBERRIES-ICE_CREAM-CHOPPED_STRAWBERRIES))\"", // On récupère l'assiette déjà existante qui est compatible avec le 3e client
+//        "ligueBronze/game--2553030406430916600-state-219.txt, USE 0 1, Drop item", // Comme le four est déjà occupé et qu'on n'a plus aucun client qui ne nécessite pas d'utiliser le four, on dépose la pâte à côté du four
+//        "ligueBronze/game--3228865474660574200-state-35.txt, USE 4 0, Drop item to get STRAWBERRIES", // Comme le four est déjà occupé pour 2 clients, on dépose son croissant pour aller découper des fraises pour le dernier client
         "ligueBronze/game--5458706346828992500-state-33.txt, USE 8 2, Drop item to get DOUGH", // On va devoir se déplacer jusqu'à la 1ère table de libre la plus proche
         quoteCharacter = '"',
     )

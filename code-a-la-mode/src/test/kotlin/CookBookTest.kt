@@ -2,14 +2,14 @@
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
-internal class RecipeBookTest {
+internal class CookBookTest {
 
     @Test
     fun stepsToPrepareBaseItem() {
-        val recipeBook = RecipeBook()
+        val cookBook = CookBook()
         val itemToPrepare = Item.CHOPPED_STRAWBERRIES
 
-        val actions = recipeBook.stepsToPrepareBaseItem(itemToPrepare)
+        val actions = cookBook.stepsToPrepareBaseItem(itemToPrepare)
 
         assertThat(actions).containsExactly(
             Step.GetSome(Item.STRAWBERRIES),
