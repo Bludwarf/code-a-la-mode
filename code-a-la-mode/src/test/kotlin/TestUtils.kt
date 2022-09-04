@@ -21,7 +21,9 @@ class TestUtils {
 
         fun gameState(path: String, game: Game = game(gamePathFromGameStatePath(path))): GameState {
             val input = inputFrom(path)
-            return input.nextGameState(game)
+            return input.nextGameState(game).copy(
+                createdByTests = true
+            )
         }
 
         private fun gamePathFromGameStatePath(gameStatePath: String): String {

@@ -82,7 +82,7 @@ internal class SimulatorTest {
             simulator.simulateWhile(
                 initialGameState,
                 { it.customers.isNotEmpty() && it.turnsRemaining > 0 },
-                { gameState ->
+                gameStateFunction = { gameState ->
                     println()
                     writer.write(gameState)
                     writer.newLine()

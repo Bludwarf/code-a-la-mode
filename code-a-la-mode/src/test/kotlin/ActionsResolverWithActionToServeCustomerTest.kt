@@ -18,8 +18,8 @@ internal class ActionsResolverWithActionToServeCustomerTest {
     fun resolveBestActionWithDough(customerItemName: String, playerItemName: String, expectedActionCommand: String) {
         val game = game("ligue3/game-7942577706886182900.txt")
         val customer = Customer(Item(customerItemName), 1200)
-        val player = Chef(Position(1, 3), if (playerItemName != "NONE") Item(playerItemName) else null)
-        val gameState = GameState(game, 200, player, Chef(Position(9, 3)), emptySet(), listOf(customer))
+        val player = Chef("Player", Position(1, 3), if (playerItemName != "NONE") Item(playerItemName) else null)
+        val gameState = GameState(game, 200, player, Chef("Partner", Position(9, 3)), emptySet(), listOf(customer))
         val playerState = PlayerState()
         val actionsResolver = ActionsResolverWithActionToServeCustomer(gameState)
 
