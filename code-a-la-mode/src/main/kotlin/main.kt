@@ -977,7 +977,13 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
 
         val fastestCustomerWithDishToServe = customer.withAllDishes.minByOrNull { countTurnsToServe(it) }
             ?: return Action.Wait("No more dishes") // TODO trouver d'autres dish
-        val actionsResolverToServe = ActionsResolverToServe(fastestCustomerWithDishToServe, gameState)
+
+        val actionsResolverToServe: ActionsResolver =
+        if (fastestCustomerWithDishToServe.missingItemsInDish.isNotEmpty()) {
+            ActionsResolverToAssemble(fastestCustomerWithDishToServe, gameState)
+        } else {
+            ActionsResolverToServe(fastestCustomerWithDishToServe, gameState)
+        }
         return actionsResolverToServe.nextAction()
     }
 
