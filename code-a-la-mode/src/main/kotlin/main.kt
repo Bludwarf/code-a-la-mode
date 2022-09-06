@@ -126,8 +126,7 @@ data class GameState(
     val ovens = listOf(Equipment.OVEN)
 
     fun contains(item: Item): Boolean {
-        // TODO faut-il inclure le partner ?
-        return chefs.any { chef -> chef.has(item) } || findTableWith(item) != null || kitchen.getEquipmentThatProvides(
+        return ovenContents == item || chefs.any { chef -> chef.has(item) } || findTableWith(item) != null || kitchen.getEquipmentThatProvides(
             item
         ) != null
     }
