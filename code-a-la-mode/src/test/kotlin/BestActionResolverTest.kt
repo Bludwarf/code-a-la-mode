@@ -29,9 +29,13 @@ internal class BestActionResolverTest {
         "ligueBronze/game--501847471512625220-state-17.txt, USE 9 0, Use BLUEBERRIES_CRATE", // On est toujours le plus rapide pour faire une tarte
         "ligueBronze/game--501847471512625220-state-21.txt, USE 8 2, Drop item to get DOUGH", // On va devoir se déplacer jusqu'à la 1ère table de libre la plus proche
         "ligueBronze/game--501847471512625220-state-55.txt, USE 8 4, Drop item because cannot use STRAWBERRIES provider", // On doit lâcher son assiette pour préparer des fraises
+        "ligueBronze/game--2174831961734777090-state-20.txt, USE 8 4, Drop item because cannot use STRAWBERRIES provider", // On doit lâcher son assiette pour préparer des fraises
+        "ligueBronze/game-3826859358225928200-state-45.txt, USE 5 2,", // On prend l'assiette pour aider à servir le 3e client
+        "ligueBronze/game-3826859358225928200-state-47.txt, USE 10 4,", // Comme il ne reste plus qu'à attendre que le croissant cuise, on s'en rapproche pour servir le 3e client
+        "ligueBronze/game-3826859358225928200-state-49.txt, USE 8 2,", // On dépose l'assiette sur la table la plus proche de nous et du partenaire pour l'aider à servir le 3e client
         quoteCharacter = '"',
     )
-    fun resolveBestAction(gameStatePath: String, expectedActionString: String, expectedActionComment: String) {
+    fun resolveBestAction(gameStatePath: String, expectedActionString: String, expectedActionComment: String?) {
         val gameState = gameState(gameStatePath)
         val bestActionResolver = BestActionResolver()
 

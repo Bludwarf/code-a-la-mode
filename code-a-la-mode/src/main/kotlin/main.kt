@@ -1,15 +1,17 @@
-
 import java.io.OutputStream
 import java.io.PrintWriter
 import java.util.*
 import java.util.function.Function
 import java.util.function.Predicate
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.pow
 import kotlin.math.sqrt
 
 private const val PRINT_GAME = true
 private const val PRINT_GAME_STATE = true
+
+private val cookBook = CookBook()
 
 val equipmentMapper = EquipmentMapper()
 var debugEnabled = true
@@ -121,6 +123,8 @@ data class GameState(
 
     val chefs = setOf(player, partner)
 
+    val ovens = listOf(Equipment.OVEN)
+
     fun contains(item: Item): Boolean {
         // TODO faut-il inclure le partner ?
         return chefs.any { chef -> chef.has(item) } || findTableWith(item) != null || kitchen.getEquipmentThatProvides(
@@ -138,17 +142,23 @@ data class GameState(
 
     fun findOvensThatContain(item: Item?): List<Oven> {
         return if (ovenContents == item) {
-            listOf(Equipment.OVEN)
+            ovens
         } else {
             emptyList()
         }
     }
 
+    fun findOvensThatWillProduce(item: Item): List<Oven> {
+        val producedItemAfterBaking = cookBook.producedItemAfterBaking(ovenContents)
+        return if (producedItemAfterBaking == item) ovens else emptyList()
+    }
+
+
     fun getEmptyOven(): Oven? {
         return getOvenThatContains(null)
     }
 
-    private fun findEmptyTablesNextTo(position: Position): List<Table> {
+    fun findEmptyTablesNextTo(position: Position): List<Table> {
         return emptyTables
             .filter { emptyTable -> emptyTable.isNextTo(position) }
     }
@@ -199,6 +209,7 @@ data class GameState(
 fun debug(message: Any) {
     if (debugEnabled) System.err.println(message.toString())
 }
+
 fun debug(t: Throwable) {
     t.printStackTrace(System.err)
 }
@@ -209,7 +220,7 @@ fun debug(elements: Collection<Any>) {
 
 fun debug(titleMessage: Any, elements: Collection<Any>) {
     if (debugEnabled) {
-        debug(titleMessage)
+        debug("$titleMessage :")
         elements.forEach { debug("- $it") }
     }
 }
@@ -722,11 +733,11 @@ abstract class ActionsResolver(protected val gameState: GameState) {
     protected val partner = gameState.partner
     protected val customers = gameState.customers
     protected val ovenContents = gameState.ovenContents
+    protected val ovenTimer = gameState.ovenTimer
 
     protected val baseItemsWantedByCustomers by lazy { customers.flatMap { it.item.baseItems }.toSet() }
 
     protected val useWindow = Action.Use(kitchen.getPositionOf(Equipment.WINDOW))
-    protected val cookBook = CookBook()
     protected val pathFinder = PathFinder(gameState)
 
     protected val Customer.index: Int get() = customers.indexOf(this) + 1
@@ -752,6 +763,19 @@ abstract class ActionsResolver(protected val gameState: GameState) {
         } else {
             use(Equipment.WINDOW, comment)
         }
+    }
+
+    protected fun givePlayerItemToPartner(comment: String = "Give item to partner"): Action {
+
+        // On cherche une table parfaite entre les deux joueur
+        val playerAdjacentEmptyTables = gameState.findEmptyTablesNextTo(player.position)
+        val partnerAdjacentEmptyTables = gameState.findEmptyTablesNextTo(partner.position)
+        val commonAdjacentEmptyTables = playerAdjacentEmptyTables intersect partnerAdjacentEmptyTables
+        val bestCommonTable = commonAdjacentEmptyTables
+            .sortedWith(kitchen.mostAccessibleTableComparator)
+            .firstOrNull() ?: return dropPlayerItem(comment)
+
+        return use(bestCommonTable, comment)
     }
 
     protected fun use(table: Table, comment: String = "Got some ${table.item?.name} on table $table"): Action {
@@ -803,6 +827,10 @@ abstract class ActionsResolver(protected val gameState: GameState) {
 
     protected fun distanceFromPlayerTo(item: Item): Int {
         val position = gameState.getPositionOf(item) ?: throw Throwable("Cannot find $item in kitchen")
+        return distanceFromPlayerTo(position)
+    }
+
+    protected fun distanceFromPlayerTo(position: Position): Int {
         return pathFinder.distance(player.position, position)
     }
 
@@ -853,7 +881,9 @@ abstract class ActionsResolver(protected val gameState: GameState) {
     protected fun Chef.hasAccessTo(item: Item): Boolean {
         val chef = this
         if (chef.has(item)) return true
-        return gameState.getPositionsOf(item).any { itemPosition ->
+        val positionsOfItem = gameState.getPositionsOf(item)
+        if (positionsOfItem.isEmpty()) return false
+        return positionsOfItem.any { itemPosition ->
             pathFinder.possiblePaths(chef.position, itemPosition).isNotEmpty()
         }
     }
@@ -865,6 +895,11 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
     ActionsResolver(gameState) {
 
     override fun nextAction(): Action {
+
+        if (customerBeingServedByPartner != null) {
+            // TODO il faudrait aider le partner
+        }
+
         var partnerIsIdle = customerBeingServedByPartner == null
         var itemPreparedByPartner: Item? = null
         customers
@@ -873,7 +908,9 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
             .forEach { customer: Customer ->
 
                 if (isReadyToBeServed(customer)) {
-                    if (partnerIsIdle && fastestChefToServe(customer) == partner) {
+                    if (chefMustBeJoinedToServe(customer)) {
+                        return givePlayerItemToPartner("Drop item to let partner serve ${customer.index}")
+                    } else if (partnerIsIdle && fastestChefToServe(customer) == partner) {
                         debug("Partner will serve ${customer.index}")
                         partnerIsIdle = false
                     } else {
@@ -895,8 +932,7 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
 
                                 val remainingMissingItemsInGame = customerWithDish.missingItemsInGame - item
                                 if (remainingMissingItemsInGame.isEmpty()) {
-                                    debug("Help partner to serve $customerWithDish")
-                                    return serve(customerWithDish)
+                                    return helpPartnerToServe(customerWithDish, item)
                                 }
 
                             } else {
@@ -908,6 +944,26 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
             }
 
         return Action.Wait("No more customer")
+    }
+
+    /**
+     * - Le joueur porte le seul plat possible pour le client
+     * - Le partenaire porte le dernier ingrédient nécessaire
+     * - Il n'y a pas d'autres ingrédients en jeu
+     */
+    private fun chefMustBeJoinedToServe(customer: Customer): Boolean {
+        val customerWithPartialyAssembledDishes = customer.withAllDishes.filter { it.dish != Item.DISH }
+        if (customerWithPartialyAssembledDishes.size == 1) {
+            val customerWithDish = customerWithPartialyAssembledDishes.first()
+
+            if (player.has(customerWithDish.dish)) {
+                if (customerWithDish.missingItemsInDish.size == 1) {
+                    val lastItem = customerWithDish.missingItemsInDish.first()
+                    return partner.has(lastItem)
+                }
+            }
+        }
+        return false
     }
 
     private val customerBeingServedByPartner: Customer? by lazy { findOnlyCompatibleCustomerOrNull(partner) }
@@ -922,7 +978,8 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
 
         val fastestCustomerWithDishToServe = customer.withAllDishes.minByOrNull { countTurnsToServe(it) }
             ?: return Action.Wait("No more dishes") // TODO trouver d'autres dish
-        return serve(fastestCustomerWithDishToServe)
+        val actionsResolverToServe = ActionsResolverToServe(fastestCustomerWithDishToServe, gameState)
+        return actionsResolverToServe.nextAction()
     }
 
     private fun countTurnsToServe(customerWithDish: CustomerWithDish): Int {
@@ -991,58 +1048,21 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
         return Comparator.comparing(keyExtractor).reversed()
     }
 
-    private fun serve(customerWithDish: CustomerWithDish): Action {
-        debug("Serve $customerWithDish")
-
-        val remainingItems = with(customerWithDish) {
-            if (player.item != null) {
-                if (player.item == dish) {
-                    missingItemsInDish
-                } else {
-                    setOf(dish)
-                }
-            } else {
-                setOf(dish) + missingItemsInDish
-            }
-        }
-            .filter { player.hasAccessTo(it) } // On peut avoir des item en préparation par le partner
-            .sortedWith(Comparator.comparing {
-                distanceFromPlayerTo(it) // TODO trier les aliments restants à collecter pour player
-            })
-
-        debug("remainingItems :")
-        debug(remainingItems)
-        val nextItem = remainingItems.firstOrNull() ?: return useWindow
-        return get(nextItem) { Action.Wait("Missing $nextItem to serve $customerWithDish") }
-    }
-
-    private fun get(item: Item, actionOnMissingBaseItem: (Item) -> Action): Action {
-        val tableWithItem = gameState.findTableWith(item)
-        if (tableWithItem != null) {
-            if (!playerIsAllowedToGrab(tableWithItem.item!!)) {
-                if (player.isNextTo(tableWithItem)) {
-                    return dropPlayerItem("Drop to get $item")
-                }
-            }
-            return use(tableWithItem)
-        }
-
-        val equipment = kitchen.getEquipmentThatProvides(item)
-        if (equipment != null) {
-            if (!playerIsAllowedToUse(equipment)) {
-                if (player.isNextTo(kitchen.getPositionOf(equipment))) {
-                    return dropPlayerItem("Drop to get $item")
-                }
-            }
-            return use(equipment)
-        }
-
-        return actionOnMissingBaseItem(item)
-    }
-
     private fun prepare(item: Item, customerWithDish: CustomerWithDish): Action {
         debug("Prepare ${item.name}")
         return ActionsResolverToPrepare(item, customerWithDish, gameState).nextAction() // TODO cache
+    }
+
+    /**
+     * Aide le partenaire, qui prépare le dernier ingrédient manquant, à servir le plus rapidement possible le client
+     */
+    private fun helpPartnerToServe(customerWithDish: CustomerWithDish, lastMissingItemPreparedByPartner: Item): Action {
+        debug("Help partner to serve $customerWithDish")
+        return ActionsResolverToHelpPartnerToPrepare(
+            customerWithDish,
+            lastMissingItemPreparedByPartner,
+            gameState
+        ).nextAction()
     }
 
 }
@@ -1111,6 +1131,145 @@ class ActionsResolverToPrepare(
 
 }
 
+class ActionsResolverToHelpPartnerToPrepare(
+    private val customerWithDish: CustomerWithDish,
+    private val lastMissingItemPreparedByPartner: Item,
+    gameState: GameState,
+) : ActionsResolver(gameState) {
+
+    private val actionsResolverToAssemble: ActionsResolverToAssemble =
+        ActionsResolverToAssemble(customerWithDish, gameState)
+
+    override fun nextAction(): Action {
+        // TODO Est-ce que je l'aide à préparer ou je l'aide à assembler ? Pour le moment on assemble
+        return actionsResolverToAssemble.nextAction()
+    }
+
+}
+
+class ActionsResolverToAssemble(
+    private val customerWithDish: CustomerWithDish,
+    gameState: GameState,
+) : ActionsResolver(gameState) {
+
+    override fun nextAction(): Action {
+        return assembleFor(customerWithDish)
+    }
+
+    private fun assembleFor(customerWithDish: CustomerWithDish): Action {
+        debug("Assembling for $customerWithDish")
+
+        if (player.item == customerWithDish.customer.item) return dropPlayerItem("Drop dish to let partner serve $customerWithDish")
+
+        val remainingItems = with(customerWithDish) {
+            if (player.item != null) {
+                if (player.item == dish) {
+                    missingItemsInDish
+                } else {
+                    setOf(dish)
+                }
+            } else {
+                setOf(dish) + missingItemsInDish
+            }
+        }.also { debug("Remaining items", it) }
+
+        val remainingAccessibleItems = remainingItems
+            .filter { player.hasAccessTo(it) } // On peut avoir des item en préparation par le partenaire
+            .sortedWith(Comparator.comparing {
+                distanceFromPlayerTo(it) // TODO trier les aliments restants à collecter pour player
+            }).also { debug("Remaining accessible items", it) }
+
+        if (remainingAccessibleItems.isEmpty()) {
+            return partialAssembleFor(customerWithDish, remainingItems - remainingAccessibleItems.toSet())
+        }
+
+        val nextItem =
+            remainingAccessibleItems.firstOrNull()
+                ?: return Action.Wait("Waiting for someone to serve $customerWithDish")
+        return get(nextItem)
+    }
+
+    private fun partialAssembleFor(
+        customerWithDish: CustomerWithDish,
+        notAccessibleRemainingItems: Set<Item>,
+    ): Action {
+        debug("Partial assembling for $customerWithDish")
+        if (notAccessibleRemainingItems.isEmpty()) return Action.Wait("Customer has no remaining item !?")
+
+        val ovensThatWillProduceRemainingItems = notAccessibleRemainingItems.flatMap { item ->
+            gameState.findOvensThatWillProduce(item)
+        }
+
+        val closestOven = ovensThatWillProduceRemainingItems.sortedBy { countTurnToTakeFrom(it) }
+            .firstOrNull() ?: return Action.Wait("No oven will produce remaining items")
+        return use(closestOven, "Using closest oven that will produce remaining items")
+    }
+
+    private fun countTurnToTakeFrom(oven: Oven): Int {
+        val distance = distanceFromPlayerTo(gameState.kitchen.getPositionOf(oven))
+        val turnsToBeNextToOven = ceil(distance / 4.0).toInt()
+
+        val turnsToWait = nextPairNumber((ovenTimer - turnsToBeNextToOven).coerceAtLeast(0))
+
+        return turnsToBeNextToOven + turnsToWait + 1
+    }
+
+    private fun get(item: Item): Action {
+        val tableWithItem = gameState.findTableWith(item)
+        if (tableWithItem != null) {
+            if (!playerIsAllowedToGrab(tableWithItem.item!!)) {
+                if (player.isNextTo(tableWithItem)) {
+                    return dropPlayerItem("Drop to get $item")
+                }
+            }
+            return use(tableWithItem)
+        }
+
+        val equipment = kitchen.getEquipmentThatProvides(item)
+        if (equipment != null) {
+            if (!playerIsAllowedToUse(equipment)) {
+                if (player.isNextTo(kitchen.getPositionOf(equipment))) {
+                    return dropPlayerItem("Drop to get $item")
+                }
+            }
+            return use(equipment)
+        }
+
+        // TODO on pourrait regarder dans le four si l'élément va bientôt arriver
+        // TODO il faut aussi s'assurer qu'on sera le 1er à ouvrir le four, sinon il faut déposer l'assiette au partenaire
+        return Action.Wait("Waiting for missing $item to assemble ${customerWithDish.itemsToAssemble}")
+    }
+
+}
+
+class ActionsResolverToServe(
+    private val customerWithDish: CustomerWithDish,
+    gameState: GameState,
+) : ActionsResolver(gameState) {
+
+    private val customer: Customer by lazy(customerWithDish::customer)
+
+    override fun nextAction(): Action {
+        debug("Serve $customerWithDish")
+
+        return if (player.item != customer.item) get(customer.item)
+        else useWindow
+    }
+
+    private fun get(item: Item): Action {
+        val tableWithItem = gameState.findTableWith(item)
+        if (tableWithItem != null) {
+            return use(tableWithItem)
+        }
+        return Action.Wait("Waiting for item $item to serve $customerWithDish")
+    }
+
+}
+
+class ActionsResolverToWait(gameState: GameState) : ActionsResolver(gameState) {
+    private val wait = Action.Wait("Only waiting...")
+    override fun nextAction() = wait
+}
 
 class CannotFindEmptyTables : Throwable("Cannot find any empty tables")
 
@@ -1178,7 +1337,7 @@ class CookBook {
         return stepsToPrepare.any { step -> step is Step.WaitForItemInOven && step.item == item }
     }
 
-    fun producedItemAfterBaking(ovenContents: Item): Item? {
+    fun producedItemAfterBaking(ovenContents: Item?): Item? {
         // TODO utiliser les recettes
         return when (ovenContents) {
             Item.DOUGH -> Item.CROISSANT
@@ -1465,13 +1624,8 @@ class Simulator {
     }
 
     private fun cooked(ovenContents: Item?): Item? {
-        // TODO utiliser le cookbook
-        return when (ovenContents) {
-            null -> null
-            Item.DOUGH -> Item.CROISSANT
-            Item.RAW_TART -> Item.TART
-            else -> null.also { debug("$ovenContents has burned !") }
-        }
+        if (ovenContents == null) return null
+        return cookBook.producedItemAfterBaking(ovenContents) ?: (null.also { debug("$ovenContents has burned !") })
     }
 
     /**
@@ -1615,7 +1769,7 @@ class Simulator {
     }
 
     private fun chopped(item: Item?): Item? {
-        return when(item) {
+        return when (item) {
             Item.STRAWBERRIES -> Item.CHOPPED_STRAWBERRIES
             Item.DOUGH -> Item.CHOPPED_DOUGH
             else -> null
@@ -1688,7 +1842,7 @@ class Simulator {
                     equipment.providedItem
                 } else if (gameState.player.item == Item.CHOPPED_DOUGH && equipment.providedItem == Item.BLUEBERRIES) {
                     Item.RAW_TART
-                }  else {
+                } else {
                     gameState.player.item + equipment.providedItem
                 }
             )
@@ -1710,4 +1864,11 @@ class Simulator {
         )
     }
 
+}
+
+private fun nextPairNumber(x: Int): Int {
+    return when (x % 2) {
+        0 -> x
+        else -> x + 1
+    }
 }

@@ -2,6 +2,8 @@ import java.util.Comparator
 import java.util.function.Supplier
 import kotlin.math.ceil
 
+private val cookBook = CookBook()
+
 class ActionsResolverItemFocused(gameState: GameState, private val playerState: PlayerState) :
     ActionsResolver(gameState) {
     override fun nextAction(): Action {
