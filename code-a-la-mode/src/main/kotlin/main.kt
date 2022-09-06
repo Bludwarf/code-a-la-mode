@@ -748,9 +748,13 @@ abstract class ActionsResolver(protected val gameState: GameState) {
     abstract fun nextAction(): Action
     protected fun canBeTakenOutOfOven(ovenContents: Item): Boolean {
         // TODO calculer le temps qu'il faut pour aller au four avant que ça brule
-        return cookBook.needToBeBakedByOven(ovenContents) && (player.item == null || player.contains(Item.DISH) && !player.contains(
+        return cookBook.canBurnInOven(ovenContents) && (player.item == null || player.contains(Item.DISH) && !player.contains(
             ovenContents
         ))
+    }
+
+    protected val itemThatWillBurnInOven: Item? by lazy {
+        if (cookBook.canBurnInOven(ovenContents)) ovenContents else null
     }
 
     protected fun dropPlayerItem(comment: String): Action {
@@ -798,14 +802,8 @@ abstract class ActionsResolver(protected val gameState: GameState) {
         }
     }
 
-    protected fun takeItemOutOfOven(ovenContents: Item): Action {
-        if (player.item != null && player.isNextTo(kitchen.getPositionOf(Equipment.OVEN))) {
-            if (customers.any { customer -> customer.item == player.item + ovenContents }) {
-                return use(Equipment.OVEN, "Add ${ovenContents.name} to dish before it burns!")
-            }
-            return dropPlayerItem("Drop item to get ${ovenContents.name} before it burns!")
-        }
-        return use(Equipment.OVEN, "Run to oven to get ${ovenContents.name} before it burns!")
+    protected fun takeItemOutOfOven(item: Item): Action {
+        return ActionsResolverToGetFromOven(item, gameState).nextAction()
     }
 
     protected fun playerIsAllowedToGrab(item: Item): Boolean {
@@ -813,6 +811,9 @@ abstract class ActionsResolver(protected val gameState: GameState) {
         if (playerItem == Item.CHOPPED_DOUGH && item == Item.BLUEBERRIES) {
             return true
         }
+
+        if (item == Item.STRAWBERRIES || item == Item.DOUGH) return false // On ne peut pas prendre si on a pas les mains vides
+
         val containsDishComparator = Comparator.comparing<Item, Boolean> { it.contains(Item.DISH) } // TODO constante
         return containsDishComparator.compare(playerItem, item) != 0
     }
@@ -895,6 +896,16 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
 
     override fun nextAction(): Action {
 
+        if (ovenContentsHasBeenByPutBy(player)) {
+            return watchCook()
+        }
+
+        if (itemThatWillBurnInOven != null) {
+            if (fastestChefToGetFromOven(itemThatWillBurnInOven!!) != partner) {
+                return takeItemOutOfOven(itemThatWillBurnInOven!!)
+            }
+        }
+
         if (customerBeingServedByPartner != null) {
             // TODO il faudrait aider le partner
         }
@@ -912,7 +923,7 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
                     } else if (partnerIsIdle && fastestChefToServe(customer) == partner) {
                         debug("Partner will serve ${customer.index}")
                         partnerIsIdle = false
-                    } else {
+                    } else if (customer canBeServedBy player) {
                         return serve(customer)
                     }
                 } else {
@@ -943,6 +954,16 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
             }
 
         return Action.Wait("No more customer")
+    }
+
+    private fun watchCook(): Action {
+        return ActionsResolverToWatchOven(gameState).nextAction()
+    }
+
+    private fun ovenContentsHasBeenByPutBy(chef: Chef): Boolean {
+        if (ovenContents == null) return false
+        val putter = if (ovenTimer % 2 == 0) player else partner
+        return putter == chef
     }
 
     /**
@@ -979,11 +1000,11 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
             ?: return Action.Wait("No more dishes") // TODO trouver d'autres dish
 
         val actionsResolverToServe: ActionsResolver =
-        if (fastestCustomerWithDishToServe.missingItemsInDish.isNotEmpty()) {
-            ActionsResolverToAssemble(fastestCustomerWithDishToServe, gameState)
-        } else {
-            ActionsResolverToServe(fastestCustomerWithDishToServe, gameState)
-        }
+            if (fastestCustomerWithDishToServe.missingItemsInDish.isNotEmpty()) {
+                ActionsResolverToAssemble(fastestCustomerWithDishToServe, gameState)
+            } else {
+                ActionsResolverToServe(fastestCustomerWithDishToServe, gameState)
+            }
         return actionsResolverToServe.nextAction()
     }
 
@@ -995,6 +1016,12 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
 
     private fun isReadyToBeServed(customer: Customer): Boolean =
         allCustomersWithAllDishes.filter { it.customer == customer }.any { it.readyToBeServed }
+
+    private infix fun Customer.canBeServedBy(chef: Chef): Boolean {
+        return this.withAllDishes.any {
+            chef.hasAccessTo(it.dish) && it.missingItemsInDish.all { chef.hasAccessTo(it) }
+        }
+    }
 
     private fun estimateComplexityToPrepare(items: Set<Item>): Int? = estimateValue(items)
 
@@ -1018,6 +1045,12 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
         }
     }
 
+    private fun fastestChefToGetFromOven(ovenContents: Item): Chef? =
+        fastestChef("to get item from oven",
+            { it.has(ovenContents) },
+            { ActionsResolverToGetFromOven(ovenContents, it) }
+        )
+
     private fun fastestChefToServe(customer: Customer): Chef? {
 
         val comparator: Comparator<Chef> = truesFirst { it.has(customer.item) }
@@ -1033,14 +1066,25 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
         }
     }
 
-    private fun fastestChefToPrepare(item: Item, customerWithDish: CustomerWithDish): Chef? {
-
-        val fastestComparator = simulator.fastestComparator(gameState,
+    private fun fastestChefToPrepare(item: Item, customerWithDish: CustomerWithDish): Chef? =
+        fastestChef("to prepare $item",
             { it.has(item) },
             { ActionsResolverToPrepare(item, customerWithDish, it) }
         )
+
+    private fun fastestChef(
+        toDoSomething: String,
+        winCondition: Predicate<Chef>,
+        actionsResolverSupplier: Function<GameState, ActionsResolver>,
+    ): Chef? {
+
+        val fastestComparator = simulator.fastestComparator(
+            gameState,
+            winCondition,
+            actionsResolverSupplier
+        )
         val comparator: Comparator<Chef> = fastestComparator // TODO ajouter des comparateurs plus rapides si possible
-        val isTheFastest = "is the fastest to prepare $item"
+        val isTheFastest = "is the fastest $toDoSomething"
 
         return when (comparator.compare(player, partner)) {
             -1 -> player.also { debug("Player $isTheFastest") }
@@ -1068,6 +1112,33 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
             lastMissingItemPreparedByPartner,
             gameState
         ).nextAction()
+    }
+
+}
+
+class ActionsResolverToWatchOven(
+    gameState: GameState,
+) : ActionsResolver(gameState) {
+    override fun nextAction(): Action {
+        // TODO c'est ici qu'on peut faire des actions en attendant la cuisson !
+        return use(Equipment.OVEN, "Watch oven")
+    }
+
+}
+
+class ActionsResolverToGetFromOven(
+    private val itemToGetFromOven: Item,
+    gameState: GameState,
+) : ActionsResolver(gameState) {
+    override fun nextAction(): Action {
+        // TODO c'est ici qu'on peut faire des actions en attendant la cuisson, aussi ?
+        if (player.item != null && player.isNextTo(kitchen.getPositionOf(Equipment.OVEN))) {
+            if (customers.any { customer -> customer.item == player.item + itemToGetFromOven }) {
+                return use(Equipment.OVEN, "Add ${itemToGetFromOven.name} to dish before it burns!")
+            }
+            return dropPlayerItem("Drop item to get ${itemToGetFromOven.name} before it burns!")
+        }
+        return use(Equipment.OVEN, "Run to oven to get ${itemToGetFromOven.name} before it burns!")
     }
 
 }
@@ -1207,7 +1278,7 @@ class ActionsResolverToAssemble(
 
         val closestOven = ovensThatWillProduceRemainingItems.sortedBy { countTurnToTakeFrom(it) }
             .firstOrNull() ?: return Action.Wait("No oven will produce remaining items")
-        return use(closestOven, "Using closest oven that will produce remaining items")
+        return use(closestOven, "Using closest oven that will produce remaining items") // FIXME quand on arrive dans ce cas, il y a des chances que ce soit le partner qui a mis l'item dans le four, on ne doit donc pas viser le four mais le partner (qui peut être devant le four)
     }
 
     private fun countTurnToTakeFrom(oven: Oven): Int {
@@ -1342,6 +1413,10 @@ class CookBook {
         return stepsToPrepare.any { step -> step is Step.WaitForItemInOven && step.item == item }
     }
 
+    fun canBurnInOven(item: Item?): Boolean {
+        return producedItemAfterBaking(item) == null
+    }
+
     fun producedItemAfterBaking(ovenContents: Item?): Item? {
         // TODO utiliser les recettes
         return when (ovenContents) {
@@ -1376,6 +1451,7 @@ class PathFinder(private val gameState: GameState) {
             .firstOrNull()
     }
 
+    // TODO cache
     internal fun possiblePaths(
         position: Position,
         target: Position,
@@ -1579,8 +1655,8 @@ class Simulator {
         }
         return Comparator { player: Chef, partner: Chef ->
             val initialState = initialGameState.copy(
-                player = player,
-                partner = partner,
+                player = player.copy(),
+                partner = partner.copy(),
             )
             val finalState = simulateWhile(initialState, whileCondition, actionsResolverSupplier)
             val lastChefToPlay = finalState.partner
