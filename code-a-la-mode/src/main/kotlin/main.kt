@@ -1036,7 +1036,7 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
     private fun fastestChefToPrepare(item: Item, customerWithDish: CustomerWithDish): Chef? {
 
         val fastestComparator = simulator.fastestComparator(gameState,
-            { it.contains(item) },
+            { it.has(item) },
             { ActionsResolverToPrepare(item, customerWithDish, it) }
         )
         val comparator: Comparator<Chef> = fastestComparator // TODO ajouter des comparateurs plus rapides si possible
@@ -1571,17 +1571,20 @@ class Simulator {
 
     fun fastestComparator(
         initialGameState: GameState,
-        winCondition: Predicate<GameState>,
+        winCondition: Predicate<Chef>,
         actionsResolverSupplier: Function<GameState, ActionsResolver>,
     ): Comparator<Chef> {
+        val whileCondition = Predicate<GameState> {
+            !winCondition.test(it.player) && !winCondition.test(it.partner)
+        }
         return Comparator { player: Chef, partner: Chef ->
             val initialState = initialGameState.copy(
                 player = player,
                 partner = partner,
             )
-            // TODO vérifier les perfs
-            val finalState = simulateWhile(initialState, winCondition.negate(), actionsResolverSupplier)
-            val winner: Chef? = if (winCondition.test(finalState)) finalState.partner else null
+            val finalState = simulateWhile(initialState, whileCondition, actionsResolverSupplier)
+            val lastChefToPlay = finalState.partner
+            val winner: Chef? = if (winCondition.test(lastChefToPlay)) lastChefToPlay else null
             debug("Winner is $winner")
             when (winner) {
                 player -> -1
