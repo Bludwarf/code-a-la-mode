@@ -15,6 +15,8 @@ private val cookBook = CookBook()
 
 val equipmentMapper = EquipmentMapper()
 var debugEnabled = true
+var debugIndent = ""
+var debugSimulation = false
 
 // https://www.codingame.com/ide/puzzle/code-a-la-mode
 /**
@@ -75,15 +77,17 @@ data class Timer(var t0: Long = System.currentTimeMillis()) {
     }
 }
 
-class Game(val kitchen: Kitchen, val customers: List<Customer> = emptyList())
+class Game(val kitchen: Kitchen, val customers: List<Customer> = emptyList()) {
+    val spawnPositions by kitchen::spawnPositions
+}
 
 data class GameState(
     private val game: Game,
     val turnsRemaining: Int,
     val player: Chef,
     val partner: Chef,
-    val tablesWithItem: Set<Table>,
-    val customers: List<Customer>,
+    val tablesWithItem: Set<Table> = emptySet(),
+    val customers: List<Customer> = game.customers.subList(0, 3),
     val playerScore: Int = 0,
     val ovenContents: Item? = null,
     val ovenTimer: Int = 0,
@@ -206,7 +210,7 @@ data class GameState(
 }
 
 fun debug(message: Any) {
-    if (debugEnabled) System.err.println(message.toString())
+    if (debugEnabled) System.err.println(debugIndent + message.toString())
 }
 
 fun debug(t: Throwable) {
@@ -277,6 +281,7 @@ value class Input(private val input: Scanner) {
         val emptyPositions = mutableSetOf<Position>()
         val tables = mutableSetOf<Table>()
         val equipmentPositions = mutableMapOf<Equipment, Position>()
+        val nullableSpawnPositions: Array<Position?> = arrayOfNulls<Position>(2)
         for (y in 0 until Position.MAX_Y + 1) {
             val kitchenLine = input.nextLine()
             kitchenLine.forEachIndexed { x, char ->
@@ -289,13 +294,25 @@ value class Input(private val input: Scanner) {
                     if (equipment != null) {
                         equipmentPositions[equipment] = position
                     } else {
+                        if (char == '0') {
+                            nullableSpawnPositions[0] = position
+                        }
+                        if (char == '1') {
+                            nullableSpawnPositions[1] = position
+                        }
                         emptyPositions += position
                     }
                 }
             }
         }
+
+        val spawnPositions = arrayOf(
+            nullableSpawnPositions[0] ?: DEFAULT_SPAWN_POSITIONS[0],
+            nullableSpawnPositions[1] ?: DEFAULT_SPAWN_POSITIONS[1],
+        )
+
         // TODO init chefs spawn positions ("0" | "1")
-        return Kitchen(emptyPositions, equipmentPositions, tables)
+        return Kitchen(spawnPositions, emptyPositions, equipmentPositions, tables)
     }
 
     fun nextGame(): Game {
@@ -335,7 +352,10 @@ value class Input(private val input: Scanner) {
     }
 }
 
+private val DEFAULT_SPAWN_POSITIONS = arrayOf(Position(1, 3), Position(8, 3))
+
 data class Kitchen(
+    val spawnPositions: Array<Position> = DEFAULT_SPAWN_POSITIONS,
     private val floorPositions: Set<Position> = emptySet(),
     private val equipmentPositions: Map<Equipment, Position> = emptyMap(),
     val tables: Set<Table> = emptySet(),
@@ -690,6 +710,8 @@ open class Equipment(val name: String) {
         val CHOPPING_BOARD = Equipment("CHOPPING_BOARD")
         val OVEN = Oven()
     }
+
+    override fun toString(): String = name
 }
 
 class Oven : Equipment("OVEN") {
@@ -955,14 +977,14 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
             .sortedByDescending { it.award }
             .forEach { customer: Customer ->
 
-                if (isReadyToBeServed(customer)) {
-                    if (chefMustBeJoinedToServe(customer)) {
-                        return givePlayerItemToPartner("Drop item to let partner serve ${customer.index}")
+                if (isReadyToBeServedOrAssembled(customer)) {
+                    if (chefMustBeJoinedToServeOrAssemble(customer)) {
+                        return givePlayerItemToPartner("Drop item to let partner serve or assemble ${customer.index}")
                     } else if (partnerIsIdle && fastestChefToServe(customer) == partner) {
-                        debug("Partner will serve ${customer.index}")
+                        debug("Partner will serve or assemble for ${customer.index}")
                         partnerIsIdle = false
                     } else if (customer canBeServedBy player) {
-                        return serve(customer)
+                        return serveOrAssemble(customer)
                     }
                 } else {
                     val customerWithDish = customer.withAllDishes
@@ -1003,7 +1025,7 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
      * - Le partenaire porte le dernier ingrédient nécessaire
      * - Il n'y a pas d'autres ingrédients en jeu
      */
-    private fun chefMustBeJoinedToServe(customer: Customer): Boolean {
+    private fun chefMustBeJoinedToServeOrAssemble(customer: Customer): Boolean {
         val customerWithPartialyAssembledDishes = customer.withAllDishes.filter { it.dish != Item.DISH }
         if (customerWithPartialyAssembledDishes.size == 1) {
             val customerWithDish = customerWithPartialyAssembledDishes.first()
@@ -1025,28 +1047,41 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
             .filter { chef.has(it.dish) }
             .map { it.customer }.singleOrNull()
 
-    private fun serve(customer: Customer): Action {
-        debug("Serve customer $customer")
+    private fun serveOrAssemble(customer: Customer): Action {
+        debug("Serve or assemble for customer $customer")
 
-        val fastestCustomerWithDishToServe = customer.withAllDishes.minByOrNull { countTurnsToServe(it) }
-            ?: return Action.Wait("No more dishes") // TODO trouver d'autres dish
+        val readyToBeServed = customer.withAllDishes.filter { it.missingItemsInDish.isEmpty() }
 
-        val actionsResolverToServe: ActionsResolver =
-            if (fastestCustomerWithDishToServe.missingItemsInDish.isNotEmpty()) {
-                ActionsResolverToAssemble(fastestCustomerWithDishToServe, gameState)
-            } else {
-                ActionsResolverToServe(fastestCustomerWithDishToServe, gameState)
-            }
-        return actionsResolverToServe.nextAction()
+        if (readyToBeServed.isEmpty()) {
+            // TODO fastest chef to assemble
+            val fastestCustomerWithDishToAssemble = customer.withAllDishes
+                .filter { it.missingItemsInDish.isNotEmpty() }
+                .firstOrNull() ?: return Action.Wait("No more dishes to assemble") // TODO trouver d'autres dish
+            return ActionsResolverToAssemble(fastestCustomerWithDishToAssemble, gameState).nextAction()
+        } else {
+            val fastestCustomerWithDishToServe = customer.withAllDishes.minByOrNull { countTurnsToServe(it) }
+                ?: return Action.Wait("No more dishes to serve") // TODO trouver d'autres dish
+            return ActionsResolverToServe(fastestCustomerWithDishToServe, gameState).nextAction()
+        }
     }
 
     private fun countTurnsToServe(customerWithDish: CustomerWithDish): Int {
-        val turns = 3 // TODO
-        debug("$turns to serve $customerWithDish")
+        val customerIsNotServed: (t: GameState) -> Boolean = { it.customers.contains(customerWithDish.customer) }
+        val finalState = simulator.simulateWhile(gameState,
+            customerIsNotServed,
+            Function { gameState -> ActionsResolverToServe(customerWithDish, gameState) }
+        )
+        if (customerIsNotServed(finalState)) {
+            // FIXME ne devrait jamais arriver
+            debug("$customerWithDish cannot be served")
+            return Int.MAX_VALUE
+        }
+        val turns = gameState.turnsRemaining - finalState.turnsRemaining
+        debug("$turns turn(s) to serve $customerWithDish")
         return turns
     }
 
-    private fun isReadyToBeServed(customer: Customer): Boolean =
+    private fun isReadyToBeServedOrAssembled(customer: Customer): Boolean =
         allCustomersWithAllDishes.filter { it.customer == customer }.any { it.readyToBeServed }
 
     private infix fun Customer.canBeServedBy(chef: Chef): Boolean {
@@ -1267,7 +1302,7 @@ class ActionsResolverToAssemble(
     private fun assembleFor(customerWithDish: CustomerWithDish): Action {
         debug("Assembling for $customerWithDish")
 
-        if (player.item == customerWithDish.customer.item) return dropPlayerItem("Drop dish to let partner serve $customerWithDish")
+        if (partner.item == customerWithDish.customer.item) return dropPlayerItem("Drop dish to let partner serve $customerWithDish")
 
         val remainingItems = with(customerWithDish) {
             if (player.item != null) {
@@ -1595,7 +1630,11 @@ internal class Writer(`out`: OutputStream) : AutoCloseable {
         if (equipment != null) {
             return equipmentMapper.write(equipment)
         }
-        return null
+        return when (position) {
+            kitchen.spawnPositions[0] -> '0'
+            kitchen.spawnPositions[1] -> '1'
+            else -> null
+        }
     }
 
     fun newLine() {
@@ -1670,10 +1709,13 @@ class Simulator {
         initialGameState: GameState,
         whileCondition: Predicate<GameState>,
         gameStateFunction: (GameState) -> GameState,
+        debug: Boolean = initialGameState.createdByTests && debugSimulation,
     ): GameState {
         debug("=== Starting simulation ===")
         val production = !initialGameState.createdByTests
-        if (production) debugEnabled = false
+        val originalDebugEnabled = debugEnabled
+        debugEnabled = debug
+        debugIndent += "  "
         val timer = Timer()
 
         var gameState = initialGameState
@@ -1683,7 +1725,8 @@ class Simulator {
             if (gameState.turnsRemaining == turnsRemaining) TODO("Le simulateur n'a pas fait avancer le tour $turnsRemaining");
         }
 
-        if (production) debugEnabled = true
+        debugIndent = debugIndent.dropLast(2)
+        debugEnabled = originalDebugEnabled
         debug("=== Simulation finished in $timer ms ===")
         return gameState
     }
@@ -1717,10 +1760,12 @@ class Simulator {
         initialGameState: GameState,
         whileCondition: Predicate<GameState>,
         actionsResolverSupplier: Function<GameState, ActionsResolver>,
+        debug: Boolean = initialGameState.createdByTests && debugSimulation,
     ): GameState {
-        return simulateWhile(initialGameState, whileCondition) { previousGameState ->
+        return simulateWhile(initialGameState, whileCondition, { previousGameState ->
             val actionsResolver = actionsResolverSupplier.apply(previousGameState)
             val action = actionsResolver.nextAction().also { debug("${previousGameState.player} => $it") }
+            if (debug && initialGameState.createdByTests) println(debugIndent + action)
             val nextGameState = previousGameState
                 .let { simulate(it, action) }
                 .let { simulateCook(it) }
@@ -1732,7 +1777,7 @@ class Simulator {
                     )
                 }
             nextGameState
-        }
+        }, debug)
     }
 
     private fun simulateCook(gameState: GameState): GameState {
