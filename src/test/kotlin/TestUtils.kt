@@ -3,7 +3,6 @@ import org.apache.commons.io.IOUtils
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.file.Files
-import java.nio.file.OpenOption
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.util.*
@@ -20,6 +19,9 @@ class TestUtils {
 
         fun newOutputStream(testsRelativePath: Path): OutputStream {
             val testsPath = Path.of("tests")
+            if (Files.notExists(testsPath)) {
+                Files.createDirectory(testsPath)
+            }
             return Files.newOutputStream(testsPath.resolve(testsRelativePath), StandardOpenOption.CREATE, StandardOpenOption.APPEND)
         }
 
