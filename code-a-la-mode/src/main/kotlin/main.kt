@@ -776,9 +776,25 @@ abstract class ActionsResolver(protected val gameState: GameState) {
         val commonAdjacentEmptyTables = playerAdjacentEmptyTables intersect partnerAdjacentEmptyTables
         val bestCommonTable = commonAdjacentEmptyTables
             .sortedWith(kitchen.mostAccessibleTableComparator)
-            .firstOrNull() ?: return dropPlayerItem(comment)
+            .firstOrNull()
+
+        if (bestCommonTable == null) {
+            // Si on a le temps, on se rapproche du partner
+            val closestCommonTable = partnerAdjacentEmptyTables.filter { player.hasAccessTo(it) }
+                .sortedWith(
+                    closestTableFromPlayerComparator
+                        .then(kitchen.mostAccessibleTableComparator)
+                )
+                .firstOrNull() ?: return dropPlayerItem(comment)
+
+            return use(closestCommonTable, comment)
+        }
 
         return use(bestCommonTable, comment)
+    }
+
+    private val closestTableFromPlayerComparator: Comparator<Table> by lazy {
+        Comparator.comparing<Table, Int> { table -> distanceFromPlayerTo(table) }
     }
 
     protected fun use(table: Table, comment: String = "Got some ${table.item?.name} on table $table"): Action {
@@ -812,10 +828,14 @@ abstract class ActionsResolver(protected val gameState: GameState) {
             return true
         }
 
-        if (item == Item.STRAWBERRIES || item == Item.DOUGH) return false // On ne peut pas prendre si on a pas les mains vides
+        val playerItemAndItem = setOf(playerItem) + item
+        if (playerItemAndItem.any { it == Item.STRAWBERRIES || it == Item.DOUGH }) return false
 
         val containsDishComparator = Comparator.comparing<Item, Boolean> { it.contains(Item.DISH) } // TODO constante
-        return containsDishComparator.compare(playerItem, item) != 0
+        if (containsDishComparator.compare(playerItem, item) == 0) return false
+
+        // Le player ne doit pas contenir l'item et vice-versa
+        return !player.item.contains(item) && !item.contains(player.item)
     }
 
     protected fun playerIsAllowedToUse(equipment: Equipment): Boolean {
@@ -828,6 +848,10 @@ abstract class ActionsResolver(protected val gameState: GameState) {
     protected fun distanceFromPlayerTo(item: Item): Int {
         val position = gameState.getPositionOf(item) ?: throw Throwable("Cannot find $item in kitchen")
         return distanceFromPlayerTo(position)
+    }
+
+    protected fun distanceFromPlayerTo(positioned: Positioned): Int {
+        return distanceFromPlayerTo(positioned.position)
     }
 
     protected fun distanceFromPlayerTo(position: Position): Int {
@@ -883,9 +907,23 @@ abstract class ActionsResolver(protected val gameState: GameState) {
         if (chef.has(item)) return true
         val positionsOfItem = gameState.getPositionsOf(item)
         if (positionsOfItem.isEmpty()) return false
-        return positionsOfItem.any { itemPosition ->
-            pathFinder.possiblePaths(chef.position, itemPosition).isNotEmpty()
-        }
+        return positionsOfItem.any { chef.hasAccessTo(it) }
+    }
+
+    protected fun Chef.hasAccessTo(positioned: Positioned): Boolean {
+        val chef = this
+        return chef.hasAccessTo(positioned.position)
+    }
+
+    protected fun Chef.hasAccessTo(position: Position): Boolean {
+        val chef = this
+        return pathFinder.possiblePaths(chef.position, position).isNotEmpty()
+    }
+
+    protected fun ovenContentsHasBeenByPutBy(chef: Chef): Boolean {
+        if (ovenContents == null) return false
+        val putter = if (ovenTimer % 2 == 0) player else partner
+        return putter == chef
     }
 
 
@@ -958,12 +996,6 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
 
     private fun watchCook(): Action {
         return ActionsResolverToWatchOven(gameState).nextAction()
-    }
-
-    private fun ovenContentsHasBeenByPutBy(chef: Chef): Boolean {
-        if (ovenContents == null) return false
-        val putter = if (ovenTimer % 2 == 0) player else partner
-        return putter == chef
     }
 
     /**
@@ -1265,6 +1297,9 @@ class ActionsResolverToAssemble(
         return get(nextItem)
     }
 
+    /**
+     * On fait un assemblage partiel car il ne reste que des items non accessibles
+     */
     private fun partialAssembleFor(
         customerWithDish: CustomerWithDish,
         notAccessibleRemainingItems: Set<Item>,
@@ -1278,7 +1313,15 @@ class ActionsResolverToAssemble(
 
         val closestOven = ovensThatWillProduceRemainingItems.sortedBy { countTurnToTakeFrom(it) }
             .firstOrNull() ?: return Action.Wait("No oven will produce remaining items")
-        return use(closestOven, "Using closest oven that will produce remaining items") // FIXME quand on arrive dans ce cas, il y a des chances que ce soit le partner qui a mis l'item dans le four, on ne doit donc pas viser le four mais le partner (qui peut être devant le four)
+
+        if (ovenContentsHasBeenByPutBy(partner)) {
+            return givePlayerItemToPartner("Give dish to partner to let him assemble remaining inaccessible items $notAccessibleRemainingItems")
+        }
+
+        return use(
+            closestOven,
+            "Using closest oven that will produce remaining items"
+        )
     }
 
     private fun countTurnToTakeFrom(oven: Oven): Int {
