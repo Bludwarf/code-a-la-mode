@@ -14,6 +14,10 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
             return watchCook()
         }
 
+        if (itemBeingPrepared != null) {
+            return ActionsResolverToPrepare(itemBeingPrepared!!, gameState).nextAction()
+        }
+
         if (itemThatWillBurnInOven != null) {
             if (fastestChefToGetFromOven(itemThatWillBurnInOven!!) != partner) {
                 return takeItemOutOfOven(itemThatWillBurnInOven!!)
