@@ -54,10 +54,12 @@ tasks.register("codingame") {
                             // Strip package line
                             null
                         } else if (line.startsWith("import")) {
-                            if (line.startsWith("import $`package`.")) {
-                                null
-                            } else {
+                            // TODO en fait il faut plutôt garder uniquement les import autorisés : java.* et kotlin.*
+                            val imported = line.substringAfter("import").trim()
+                            if (imported.startsWith("java.") || imported.startsWith("kotlin.")) {
                                 "importLine" to line
+                            } else {
+                                null
                             }
                         } else {
                             "otherLine" to line
@@ -73,8 +75,10 @@ tasks.register("codingame") {
                     list + element.second
                 }
 
-            categorizedLines["importLine"]?.forEach {
-                writer.appendLine(it)
+            categorizedLines["importLine"]?.let { importLines ->
+                importLines.toSortedSet().forEach {
+                    writer.appendLine(it)
+                }
             }
             categorizedLines["otherLine"]?.forEach {
                 writer.appendLine(it)
