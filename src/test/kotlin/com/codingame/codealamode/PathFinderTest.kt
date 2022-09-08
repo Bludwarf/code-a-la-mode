@@ -1,7 +1,5 @@
 package com.codingame.codealamode
 
-import PathFinder
-import Position
 import com.codingame.codealamode.TestUtils.Companion.gameState
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test

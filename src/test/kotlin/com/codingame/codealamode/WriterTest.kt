@@ -1,6 +1,5 @@
 package com.codingame.codealamode
 
-import Writer
 import com.codingame.codealamode.TestUtils.Companion.game
 import com.codingame.codealamode.TestUtils.Companion.gameState
 import org.assertj.core.api.Assertions

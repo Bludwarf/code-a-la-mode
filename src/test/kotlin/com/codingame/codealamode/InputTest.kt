@@ -1,11 +1,5 @@
 package com.codingame.codealamode
 
-import Equipment
-import Game
-import Input
-import Kitchen
-import Position
-import Table
 import com.codingame.codealamode.Item.Companion.BLUEBERRIES
 import com.codingame.codealamode.Item.Companion.ICE_CREAM
 import com.codingame.codealamode.TestUtils.Companion.newInputStream

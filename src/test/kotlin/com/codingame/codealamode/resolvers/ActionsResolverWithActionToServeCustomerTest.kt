@@ -1,10 +1,7 @@
-package com.codingame.codealamode
+package com.codingame.codealamode.resolvers
 
 import ActionsResolverWithActionToServeCustomer
-import Chef
-import Customer
-import GameState
-import Position
+import com.codingame.codealamode.*
 import com.codingame.codealamode.TestUtils.Companion.game
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.params.ParameterizedTest

@@ -1,13 +1,7 @@
 package com.codingame.codealamode
 
-import Action
-import BestActionResolver
-import Equipment
-import GameState
+import com.codingame.codealamode.resolvers.BestActionResolver
 import com.codingame.codealamode.Item.Companion.ICE_CREAM
-import Position
-import Simulator
-import Writer
 import com.codingame.codealamode.TestUtils.Companion.DISH
 import com.codingame.codealamode.TestUtils.Companion.gameState
 import org.assertj.core.api.Assertions.assertThat

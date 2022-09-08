@@ -1,11 +1,7 @@
 package com.codingame.codealamode
 
-import ActionsResolverWithSimulation
-import Chef
-import GameState
-import Position
-import Simulator
 import com.codingame.codealamode.TestUtils.Companion.game
+import com.codingame.codealamode.resolvers.ActionsResolverWithSimulation
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource

@@ -1,7 +1,5 @@
 package com.codingame.codealamode
 
-import Position
-import Table
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
 

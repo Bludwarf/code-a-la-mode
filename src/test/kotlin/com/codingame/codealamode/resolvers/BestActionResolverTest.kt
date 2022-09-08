@@ -1,6 +1,5 @@
-package com.codingame.codealamode
+package com.codingame.codealamode.resolvers
 
-import BestActionResolver
 import com.codingame.codealamode.TestUtils.Companion.action
 import com.codingame.codealamode.TestUtils.Companion.gameState
 import org.apache.commons.lang3.StringUtils
