@@ -1,4 +1,7 @@
-
+package com.codingame.codealamode
+import CookBook
+import Equipment
+import Step
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 

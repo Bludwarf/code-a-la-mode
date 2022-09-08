@@ -1,8 +1,14 @@
+package com.codingame.codealamode
 
-
-import Item.Companion.BLUEBERRIES
-import Item.Companion.ICE_CREAM
-import TestUtils.Companion.newInputStream
+import Equipment
+import Game
+import Input
+import Kitchen
+import Position
+import Table
+import com.codingame.codealamode.Item.Companion.BLUEBERRIES
+import com.codingame.codealamode.Item.Companion.ICE_CREAM
+import com.codingame.codealamode.TestUtils.Companion.newInputStream
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
@@ -33,7 +39,7 @@ internal class InputTest {
 
         assertThat(gameState.customers).hasSize(3)
         assertThat(gameState.tablesWithItem).isEmpty()
-        assertThat(gameState.player.position).isEqualTo(Position(1,1))
+        assertThat(gameState.player.position).isEqualTo(Position(1, 1))
     }
 
     @Test

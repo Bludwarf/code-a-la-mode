@@ -1,4 +1,5 @@
-import java.util.Comparator
+
+import com.codingame.codealamode.Item
 import java.util.function.Supplier
 import kotlin.math.ceil
 
@@ -187,7 +188,7 @@ class ActionsResolverWithActionToServeCustomer(gameState: GameState) : ActionsRe
             if (player.item == customer.item) {
                 return useWindow
             }
-            if (player.item.isNotCompatibleWith(customer.item)) {
+            if (player.item!!.isNotCompatibleWith(customer.item)) {
                 return Action.Wait("Player has an item ${player.item} that is not compatible with ${customer.item}")
             }
         }

@@ -1,5 +1,8 @@
-import TestUtils.Companion.action
-import TestUtils.Companion.gameState
+package com.codingame.codealamode
+
+import BestActionResolver
+import com.codingame.codealamode.TestUtils.Companion.action
+import com.codingame.codealamode.TestUtils.Companion.gameState
 import org.apache.commons.lang3.StringUtils
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.params.ParameterizedTest

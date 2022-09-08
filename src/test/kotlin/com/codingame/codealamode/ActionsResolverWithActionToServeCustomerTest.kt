@@ -1,4 +1,11 @@
-import TestUtils.Companion.game
+package com.codingame.codealamode
+
+import ActionsResolverWithActionToServeCustomer
+import Chef
+import Customer
+import GameState
+import Position
+import com.codingame.codealamode.TestUtils.Companion.game
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
@@ -20,7 +27,6 @@ internal class ActionsResolverWithActionToServeCustomerTest {
         val customer = Customer(Item(customerItemName), 1200)
         val player = Chef("Player", Position(1, 3), if (playerItemName != "NONE") Item(playerItemName) else null)
         val gameState = GameState(game, 200, player, Chef("Partner", Position(9, 3)), emptySet(), listOf(customer))
-        val playerState = PlayerState()
         val actionsResolver = ActionsResolverWithActionToServeCustomer(gameState)
 
         val action = actionsResolver.nextAction()

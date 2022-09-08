@@ -1,10 +1,9 @@
-import org.assertj.core.api.Assertions
+package com.codingame.codealamode
 
-import org.junit.jupiter.api.Assertions.*
+import Position
+import Table
+import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
-import java.util.*
 
 internal class TableTest {
 

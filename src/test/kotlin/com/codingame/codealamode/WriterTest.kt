@@ -1,7 +1,8 @@
+package com.codingame.codealamode
 
-
-import TestUtils.Companion.game
-import TestUtils.Companion.gameState
+import Writer
+import com.codingame.codealamode.TestUtils.Companion.game
+import com.codingame.codealamode.TestUtils.Companion.gameState
 import org.assertj.core.api.Assertions
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayOutputStream

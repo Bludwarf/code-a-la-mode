@@ -1,6 +1,15 @@
-import Item.Companion.ICE_CREAM
-import TestUtils.Companion.DISH
-import TestUtils.Companion.gameState
+package com.codingame.codealamode
+
+import Action
+import BestActionResolver
+import Equipment
+import GameState
+import com.codingame.codealamode.Item.Companion.ICE_CREAM
+import Position
+import Simulator
+import Writer
+import com.codingame.codealamode.TestUtils.Companion.DISH
+import com.codingame.codealamode.TestUtils.Companion.gameState
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
