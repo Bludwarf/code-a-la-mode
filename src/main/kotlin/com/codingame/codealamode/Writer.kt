@@ -4,7 +4,7 @@ import equipmentMapper
 import java.io.OutputStream
 import java.io.PrintWriter
 
-internal class Writer(`out`: OutputStream) : AutoCloseable {
+class Writer(`out`: OutputStream) : AutoCloseable {
     private val out = PrintWriter(out)
     private var currentLineIsEmpty = true
 

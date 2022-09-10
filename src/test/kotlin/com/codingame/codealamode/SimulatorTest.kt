@@ -1,9 +1,9 @@
 package com.codingame.codealamode
 
-import com.codingame.codealamode.resolvers.BestActionResolver
 import com.codingame.codealamode.Item.Companion.ICE_CREAM
 import com.codingame.codealamode.TestUtils.Companion.DISH
 import com.codingame.codealamode.TestUtils.Companion.gameState
+import com.codingame.codealamode.resolvers.BestActionResolver
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest

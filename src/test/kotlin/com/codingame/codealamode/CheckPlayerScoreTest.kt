@@ -15,7 +15,7 @@ class CheckPlayerScoreTest {
         "ligue3/game-7942577706886182900.txt, 1700, 1700",
         "ligueBronze/game-7942577706886182900.txt, 1700, 1700",
         "ligueBronze/game--8170461584516249600.txt, 2050, 2050",
-        "ligueBronze/game--2553030406430916600.txt, 0, 0", // TODO nulos !
+        "ligueBronze/game--2553030406430916600.txt, 0, 0", // TODO nulos ! // TODO nulos !
         "ligueBronze/game--3228865474660574200.txt, 0, 3700", // TODO nulos !
         "ligueBronze/game--5458706346828992500.txt, 0, 5850", // TODO nulos !
         "ligueBronze/game--501847471512625220.txt, 0, 2500", // TODO nulos !
@@ -45,6 +45,7 @@ class CheckPlayerScoreTest {
             initialGameState,
             { true },
             Function { gameState -> ActionsResolverWithSimulation(gameState, Simulator()) },
+            true,
         )
 
         TestUtils.writeTestResult("Game \"$gamePath\" : Player score as ${if (spawnAsPlayer) "player" else "partner"} : ${finalGameState.playerScore}")
