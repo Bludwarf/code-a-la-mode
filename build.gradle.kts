@@ -37,11 +37,8 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 tasks.register("codingame") {
 //    dependsOn("build") // TODO does not work, see tasks.named("build") { finalizedBy("codingame") } below
 
-    val `package` = "com.codingame.codealamode" // TODO property : should be common directory of inputs.files
-    val packageDir = `package`.replace('.', '/')
-
     // Inspired by https://stackoverflow.com/a/47422803/1655155
-    inputs.files(fileTree("src/main/kotlin/$packageDir")).skipWhenEmpty()
+    inputs.files(fileTree("src/main/kotlin")).skipWhenEmpty()
     outputs.file("${project.buildDir}/codingame/main.kt")
     doLast {
         outputs.files.singleFile.bufferedWriter().use { writer ->
