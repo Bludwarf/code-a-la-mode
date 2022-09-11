@@ -7,8 +7,8 @@ class PathFinder(private val gameState: GameState) {
     internal fun findPath(position: Position, target: Position): Path? {
         return possiblePaths(position, target)
             .sortedWith(
-                Comparator.comparing<Path?, Double?> { path -> path.minDistanceWith(target) }
-                    .thenComparing { path -> path.length }
+                Comparator.comparing { path -> path.length }
+//                    .thenComparing { path -> path.length } // TODO si on veut faire du micro positionnement (comme teccles), il faut le faire dans le ActionResolver et pas dans le PathFinder
             )
             .firstOrNull()
     }

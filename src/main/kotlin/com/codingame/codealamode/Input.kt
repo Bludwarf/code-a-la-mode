@@ -57,44 +57,49 @@ value class Input(private val input: Scanner) {
         val tables = mutableSetOf<Table>()
         val equipmentPositions = mutableMapOf<Equipment, Position>()
         val nullableSpawnPositions: Array<Position?> = arrayOfNulls<Position>(2)
+        val kitchenLines = mutableListOf<String>()
         for (y in 0 until Position.MAX_Y + 1) {
             val kitchenLine = input.nextLine()
+            kitchenLines += kitchenLine
             kitchenLine.forEachIndexed { x, char ->
                 val position = Position(x, y)
 
                 if (char == '#') {
                     tables += Table(position)
                 } else {
-                    val equipment = equipmentMapper.read(char)
-                    if (equipment != null) {
-                        equipmentPositions[equipment] = position
-                    } else {
+                    if (char == '0' || char == '1') {
                         if (char == '0') {
                             nullableSpawnPositions[0] = position
                         }
                         if (char == '1') {
                             nullableSpawnPositions[1] = position
                         }
-                        emptyPositions += position
+                    } else {
+                        val equipment = equipmentMapper.read(char)
+                        if (equipment != null) {
+                            equipmentPositions[equipment] = position
+                        } else {
+                            emptyPositions += position
+                        }
                     }
                 }
             }
         }
 
         val spawnPositions = arrayOf(
-            nullableSpawnPositions[0] ?: DEFAULT_SPAWN_POSITIONS[0],
-            nullableSpawnPositions[1] ?: DEFAULT_SPAWN_POSITIONS[1],
+            nullableSpawnPositions[0] ?: throw NotImplementedError("Missing spawn position for player."),
+            nullableSpawnPositions[1] ?: throw NotImplementedError("Missing spawn position for partner."),
         )
 
         // TODO init chefs spawn positions ("0" | "1")
-        return Kitchen(spawnPositions, emptyPositions, equipmentPositions, tables)
+        return Kitchen(spawnPositions, emptyPositions, equipmentPositions, tables, kitchenLines)
     }
 
     fun nextGame(): Game {
         val customers = nextCustomers()
         input.nextLine()
         val kitchen = nextKitchen()
-        return Game(kitchen, customers)
+        return Game(kitchen, customers.toMutableList())
     }
 
     fun nextGameState(game: Game): GameState {

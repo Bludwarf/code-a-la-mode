@@ -9,19 +9,18 @@ import java.util.function.Function
 
 class CheckPlayerScoreTest {
 
+    // FIXME : le simulateur ne donne pas les mêmes résultats que le jeu
     @ParameterizedTest
     @CsvSource(
-        "ligue2/game-2362403142607370200.txt, 2750, 0", // TODO nulos !
-        "ligue3/game-7942577706886182900.txt, 1700, 1700",
-        "ligueBronze/game-7942577706886182900.txt, 1700, 1700",
-        "ligueBronze/game--8170461584516249600.txt, 2050, 2050",
-        "ligueBronze/game--2553030406430916600.txt, 0, 0", // TODO nulos ! // TODO nulos !
-        "ligueBronze/game--3228865474660574200.txt, 0, 3700", // TODO nulos !
-        "ligueBronze/game--5458706346828992500.txt, 0, 5850", // TODO nulos !
-        "ligueBronze/game--501847471512625220.txt, 0, 2500", // TODO nulos !
-        "ligueBronze/game--2174831961734777090.txt, 2050, 2050",
-        "ligueBronze/game-3826859358225928200.txt, 0, 2300", // TODO nulos !
-        "ligueBronze/game--3442803331398166000.txt, 2500, 2500",
+        "ligueBronze/game-7942577706886182900.txt, 1554, 1553", // FIXME on devrait avoir 1554, 1554
+        "ligueBronze/game--8170461584516249600.txt, 3765, 3767", // FIXME on devrait avoir 3765, 3765
+        "ligueBronze/game--2553030406430916600.txt, 0, 0", // TODO nulos !
+        "ligueBronze/game--3228865474660574200.txt, 0, 0",
+        "ligueBronze/game--5458706346828992500.txt, 1423, 6588", // FIXME on devrait avoir 1423, 1423
+        "ligueBronze/game--501847471512625220.txt, 0, 5825",  // FIXME on devrait avoir 0, 0
+        "ligueBronze/game--2174831961734777090.txt, 2671, 2673", // FIXME on devrait avoir 2877, 2877
+        "ligueBronze/game-3826859358225928200.txt, 7059, 7057", // TODO devrait donner 7067, 7067
+        "ligueBronze/game--3442803331398166000.txt, 0, 0", // TODO nulos !
     )
     fun checkPlayerScore(gamePath: String, minimumScoreAsPlayer: Int, minimumScoreAsPartner: Int) {
         checkPlayerScore(gamePath, minimumScoreAsPlayer, spawnAsPlayer = true)

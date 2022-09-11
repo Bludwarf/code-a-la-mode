@@ -1,12 +1,13 @@
 package com.codingame.codealamode
 
 data class GameState(
-    private val game: Game,
+    val game: Game,
     val turnsRemaining: Int,
     val player: Chef,
     val partner: Chef,
     val tablesWithItem: Set<Table> = emptySet(),
     val customers: List<Customer> = game.customers.subList(0, 3),
+    val remainingCustomers: List<Customer> = game.customers.subList(3, game.customers.size),
     val playerScore: Int = 0,
     val ovenContents: Item? = null,
     val ovenTimer: Int = 0,

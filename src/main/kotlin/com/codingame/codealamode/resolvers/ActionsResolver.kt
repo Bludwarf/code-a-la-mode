@@ -14,7 +14,7 @@ abstract class ActionsResolver(protected val gameState: GameState) {
 
     protected val baseItemsWantedByCustomers by lazy { customers.flatMap { it.item.baseItems }.toSet() }
 
-    protected val useWindow = Action.Use(kitchen.getPositionOf(Equipment.WINDOW))
+    protected val useWindow = Action.Use(kitchen.getPositionOf(Equipment.WINDOW), "Use window")
     protected val pathFinder = PathFinder(gameState)
 
     protected val Customer.index: Int get() = customers.indexOf(this) + 1

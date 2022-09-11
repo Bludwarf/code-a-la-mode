@@ -8,4 +8,9 @@ class Customer(
     override fun toString(): String {
         return "Customer(item = $item, award = $award)"
     }
+
+    fun copy(
+        item: Item = this.item,
+        award: Int = this.award,
+    ): Customer = Customer(item, award)
 }

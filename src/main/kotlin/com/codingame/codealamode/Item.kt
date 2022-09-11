@@ -43,7 +43,7 @@ data class Item(val name: String) {
         return !isCompatibleWith(item)
     }
 
-    operator fun plus(otherItem: Item): Item = Item(baseItems + otherItem)
+    operator fun plus(otherItem: Item?): Item = if (otherItem == null) this else Item(baseItems + otherItem)
     operator fun minus(otherItem: Item): Item = Item(baseItems - otherItem)
 
     val baseItems: Items

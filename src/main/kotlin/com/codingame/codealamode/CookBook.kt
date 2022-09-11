@@ -112,4 +112,6 @@ class CookBook {
         return if (preparedItem.size == 1) preparedItem[0] else null
     }
 
+    fun isPrepared(item: Item): Boolean = PREPARED_ITEMS.contains(item)
+
 }

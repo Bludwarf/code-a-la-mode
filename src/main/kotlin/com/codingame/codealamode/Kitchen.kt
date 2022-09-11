@@ -11,6 +11,7 @@ data class Kitchen(
     private val floorPositions: Set<Position> = emptySet(),
     private val equipmentPositions: Map<Equipment, Position> = emptyMap(),
     val tables: Set<Table> = emptySet(),
+    val lines: List<String> = emptyList(),
 ) {
     private val itemProviders = mutableMapOf<Item, ItemProvider?>()
 
