@@ -36,7 +36,7 @@ fun main() {
         val timer = Timer()
 
         if (PRINT_GAME_STATE) {
-            System.err.print("com.codingame.codealamode.GameState : ")
+            System.err.print("GameState : ")
             writer.write(gameState)
             writer.flush()
             System.err.println()

@@ -68,7 +68,8 @@ class Simulator {
     ): GameState {
         return simulateWhile(initialGameState, whileCondition, { previousGameState ->
             val actionsResolver = actionsResolverSupplier.apply(previousGameState)
-            val action = actionsResolver.nextAction().also { debug("${previousGameState.player} => $it") }
+            if (debug && initialGameState.createdByTests) debug("= State ${201 - previousGameState.turnsRemaining} : ${previousGameState.player} =")
+            val action = actionsResolver.nextAction()
             if (debug && initialGameState.createdByTests) println(debugIndent + action)
             val nextGameState = previousGameState
                 .let { simulate(it, action) }

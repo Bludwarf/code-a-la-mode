@@ -18,7 +18,7 @@ abstract class ActionsResolver(protected val gameState: GameState) {
     protected val pathFinder = PathFinder(gameState)
 
     protected val Customer.index: Int get() = customers.indexOf(this) + 1
-    protected fun Customer.toString(): String = "com.codingame.codealamode.Customer #${customers.indexOf(this) + 1}"
+    protected fun Customer.toString(): String = "Customer #${customers.indexOf(this) + 1}"
 
     protected val Customer.withAllDishes: Set<CustomerWithDish>
         get() = allCustomersWithAllDishes.filter { it.customer == this }.toSet()
@@ -177,7 +177,7 @@ abstract class ActionsResolver(protected val gameState: GameState) {
         }
 
         override fun toString(): String {
-            return "com.codingame.codealamode.Customer ${index + 1} with $dish"
+            return "Customer ${index + 1} with $dish"
         }
     }
 

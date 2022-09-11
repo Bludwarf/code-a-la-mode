@@ -58,7 +58,7 @@ class ActionsResolverToAssemble(
         notAccessibleRemainingItems: Set<Item>,
     ): Action {
         debug("Partial assembling for $customerWithDish")
-        if (notAccessibleRemainingItems.isEmpty()) return Action.Wait("com.codingame.codealamode.Customer has no remaining item !?")
+        if (notAccessibleRemainingItems.isEmpty()) return Action.Wait("Customer has no remaining item !?")
 
         val ovensThatWillProduceRemainingItems = notAccessibleRemainingItems.flatMap { item ->
             gameState.findOvensThatWillProduce(item)

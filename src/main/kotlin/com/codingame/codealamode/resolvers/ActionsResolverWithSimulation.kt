@@ -45,7 +45,7 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
                 } else {
                     val customerWithDish = customer.withAllDishes
                         .sortedBy { estimateComplexityToPrepare(it.missingItemsInDish) }
-                        .also { debug("com.codingame.codealamode.Customer with all dishes", it) }
+                        .also { debug("Customer with all dishes", it) }
                         .firstOrNull()
                     customerWithDish?.missingItemsInGame
                         ?.sortedByDescending { estimateValue(it) }
