@@ -41,6 +41,10 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
                         partnerIsIdle = false
                     } else if (customer canBeServedBy player) {
                         return serveOrAssemble(customer)
+                    } else if (player.item != null) {
+                        return dropPlayerItem("Drop item to let partner assemble for ${customer.index}")
+                    } else {
+                        return Action.Wait("Impossible !!!")
                     }
                 } else {
                     val customerWithDish = customer.withAllDishes
@@ -141,9 +145,7 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
         allCustomersWithAllDishes.filter { it.customer == customer }.any { it.readyToBeServed }
 
     private infix fun Customer.canBeServedBy(chef: Chef): Boolean {
-        return this.withAllDishes.any {
-            chef.hasAccessTo(it.dish) && it.missingItemsInDish.all { chef.hasAccessTo(it) }
-        }
+        return chef.canServe(this)
     }
 
     private fun estimateComplexityToPrepare(items: Set<Item>): Int? = estimateValue(items)

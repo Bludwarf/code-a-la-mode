@@ -44,7 +44,8 @@ abstract class ActionsResolver(protected val gameState: GameState) {
     }
 
     protected fun dropPlayerItem(comment: String): Action {
-        return if (cookBook.contains(player.item!!)) {
+        if (player.item == null) return Action.Wait("No item to drop !!!")
+        return if (cookBook.contains(player.item)) {
             val nextEmptyTable = gameState.findClosestEmptyTablesTo(player.position, pathFinder)
                 .sortedWith(kitchen.mostAccessibleTableComparator)
                 .firstOrNull() ?: throw CannotFindEmptyTables()

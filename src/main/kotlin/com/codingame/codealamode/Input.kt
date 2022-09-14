@@ -74,6 +74,7 @@ value class Input(private val input: Scanner) {
                         if (char == '1') {
                             nullableSpawnPositions[1] = position
                         }
+                        emptyPositions += position
                     } else {
                         val equipment = equipmentMapper.read(char)
                         if (equipment != null) {
