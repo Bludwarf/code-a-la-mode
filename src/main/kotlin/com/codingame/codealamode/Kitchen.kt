@@ -2,7 +2,6 @@ package com.codingame.codealamode
 
 import com.codingame.codealamode.exceptions.EquipmentNotFoundException
 import com.codingame.codealamode.exceptions.ItemProviderNotFoundException
-import debug
 
 internal val DEFAULT_SPAWN_POSITIONS = arrayOf(Position(1, 3), Position(8, 3))
 
@@ -49,7 +48,7 @@ data class Kitchen(
 
     fun getPositionOf(item: Item): Position? {
         val equipmentThatProvides = getEquipmentThatProvides(item)
-            ?: return null.also { debug("Cannot find equipment that provides $item in kitchen") }
+            ?: return null//.also { debug("Cannot find equipment that provides $item in kitchen") }
         return getPositionOf(equipmentThatProvides)
     }
 

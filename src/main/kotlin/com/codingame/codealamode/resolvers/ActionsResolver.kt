@@ -2,6 +2,7 @@ package com.codingame.codealamode.resolvers
 
 import com.codingame.codealamode.*
 import com.codingame.codealamode.exceptions.CannotFindEmptyTables
+import debug
 
 abstract class ActionsResolver(protected val gameState: GameState) {
     protected val cookBook by gameState::cookBook
@@ -194,6 +195,7 @@ abstract class ActionsResolver(protected val gameState: GameState) {
         if (chef.has(item)) return true
         val positionsOfItem = gameState.getPositionsOf(item)
         if (positionsOfItem.isEmpty()) return false
+        if (positionsOfItem.size == 1 && partner.has(item)) return false
         return positionsOfItem.any { chef.hasAccessTo(it) }
     }
 
@@ -213,5 +215,37 @@ abstract class ActionsResolver(protected val gameState: GameState) {
         return putter == chef
     }
 
+    fun estimateComplexityToPrepare(items: Set<Item>): Int? = estimateValue(items)
+
+    /**
+     * TODO dans les calculs on a pris en compte les tours restants. Est-ce correct ?
+     */
+    protected fun estimateValue(item: Item): Int? {
+        if (!item.isBase) return estimateComplexityToPrepare(item.baseItems)
+        return when (item) {
+            Item.TART -> 1000
+            Item.CROISSANT -> 850
+            Item.CHOPPED_STRAWBERRIES -> 600
+            Item.BLUEBERRIES -> 250
+            Item.ICE_CREAM -> 200
+            else -> null
+        }
+    }
+
+    private fun estimateValue(items: Set<Item>): Int? {
+        if (items.isEmpty()) return 0
+        return items.sumOf { estimateValue(it) ?: return null }
+    }
+
+    protected val Customer.withSimplestDishToPrepare: ActionsResolver.CustomerWithDish?
+        get() = withAllDishes
+            .sortedBy { estimateComplexityToPrepare(it.missingItemsInDish) }
+            .also { debug("Customer with all dishes", it) }
+            .firstOrNull()
+
+    protected inline fun CustomerWithDish.forEachMissingItemsInGame(action: (Item) -> Unit) = missingItemsInGame
+        .sortedByDescending { estimateValue(it) }
+        .also { debug("Missing items in game for $this", it) }
+        .forEach(action)
 
 }

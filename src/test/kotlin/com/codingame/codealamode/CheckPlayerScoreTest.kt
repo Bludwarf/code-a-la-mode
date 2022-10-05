@@ -12,15 +12,15 @@ class CheckPlayerScoreTest {
     // FIXME : le simulateur ne donne pas les mêmes résultats que le jeu (détecté quand les résultats player/partner sont différents)
     @ParameterizedTest
     @CsvSource(
-        "ligueBronze/game-7942577706886182900.txt, 4951, 4949",
-        "ligueBronze/game--8170461584516249600.txt, 6894, 4190",
-        "ligueBronze/game--2553030406430916600.txt, 8397, 7038",
+        "ligueBronze/game-7942577706886182900.txt, 4965, 4968",
+        "ligueBronze/game--8170461584516249600.txt, 9358, 6665",
+        "ligueBronze/game--2553030406430916600.txt, 8385, 7056",
         "ligueBronze/game--3228865474660574200.txt, 4487, 6596",
-        "ligueBronze/game--5458706346828992500.txt, 6806, 6810",
-        "ligueBronze/game--501847471512625220.txt, 5813, 5852",
-        "ligueBronze/game--2174831961734777090.txt, 8174, 8176",
-        "ligueBronze/game-3826859358225928200.txt, 7077, 7076",
-        "ligueBronze/game--3442803331398166000.txt, 2433, 7361",
+        "ligueBronze/game--5458706346828992500.txt, 6795, 6825",
+        "ligueBronze/game--501847471512625220.txt, 5849, 7503",
+        "ligueBronze/game--2174831961734777090.txt, 6125, 6127",
+        "ligueBronze/game-3826859358225928200.txt, 7080, 7083",
+        "ligueBronze/game--3442803331398166000.txt, 7361, 7368",
     )
     fun checkPlayerScore(gamePath: String, minimumScoreAsPlayer: Int, minimumScoreAsPartner: Int) {
         checkPlayerScore(gamePath, minimumScoreAsPlayer, spawnAsPlayer = true)

@@ -44,31 +44,25 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
                     } else if (player.item != null) {
                         return dropPlayerItem("Drop item to let partner assemble for ${customer.index}")
                     } else {
-                        return Action.Wait("Impossible !!!")
+                        return prepareNotAccessibleItemFor(customer)
                     }
                 } else {
-                    val customerWithDish = customer.withAllDishes
-                        .sortedBy { estimateComplexityToPrepare(it.missingItemsInDish) }
-                        .also { debug("Customer with all dishes", it) }
-                        .firstOrNull()
-                    customerWithDish?.missingItemsInGame
-                        ?.sortedByDescending { estimateValue(it) }
-                        ?.also { debug("Missing items in game for $customerWithDish", it) }
-                        ?.forEach { item ->
-                            if (partnerIsIdle && fastestChefToPrepare(item, customerWithDish) == partner) {
-                                debug("Partner will prepare $item for ${customer.index}")
-                                partnerIsIdle = false
-                                itemPreparedByPartner = item
+                    val customerWithDish = customer.withSimplestDishToPrepare
+                    customerWithDish?.forEachMissingItemsInGame { item ->
+                        if (partnerIsIdle && fastestChefToPrepare(item, customerWithDish) == partner) {
+                            debug("Partner will prepare $item for ${customer.index}")
+                            partnerIsIdle = false
+                            itemPreparedByPartner = item
 
-                                val remainingMissingItemsInGame = customerWithDish.missingItemsInGame - item
-                                if (remainingMissingItemsInGame.isEmpty()) {
-                                    return helpPartnerToServe(customerWithDish, item)
-                                }
-
-                            } else {
-                                return prepare(item)
+                            val remainingMissingItemsInGame = customerWithDish.missingItemsInGame - item
+                            if (remainingMissingItemsInGame.isEmpty()) {
+                                return helpPartnerToServe(customerWithDish, item)
                             }
+
+                        } else {
+                            return prepare(item)
                         }
+                    }
                 }
 
             }
@@ -148,28 +142,6 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
         return chef.canServe(this)
     }
 
-    private fun estimateComplexityToPrepare(items: Set<Item>): Int? = estimateValue(items)
-
-    private fun estimateValue(items: Set<Item>): Int? {
-        if (items.isEmpty()) return 0
-        return items.sumOf { estimateValue(it) ?: return null }
-    }
-
-    /**
-     * TODO dans les calculs on a pris en compte les tours restants. Est-ce correct ?
-     */
-    private fun estimateValue(item: Item): Int? {
-        if (!item.isBase) return estimateComplexityToPrepare(item.baseItems)
-        return when (item) {
-            Item.TART -> 1000
-            Item.CROISSANT -> 850
-            Item.CHOPPED_STRAWBERRIES -> 600
-            Item.BLUEBERRIES -> 250
-            Item.ICE_CREAM -> 200
-            else -> null
-        }
-    }
-
     private fun fastestChefToGetFromOven(ovenContents: Item): Chef? =
         fastestChef("to get item from oven",
             { it.has(ovenContents) },
@@ -239,4 +211,30 @@ class ActionsResolverWithSimulation(gameState: GameState, private val simulator:
         ).nextAction()
     }
 
+    /**
+     * Le partenaire est déjà en train de servir un autre client avec le dernier exemplaire d'un ingrédient nécessaire
+     */
+    private fun prepareNotAccessibleItemFor(customer: Customer): Action {
+        debug("Prepare not accessible item for $customer")
+        val customerWithDish = customer.withAllDishes
+            .filter {customerWithDish ->
+                val count = gameState.getPositionsOf(customerWithDish.dish).size
+                count > 1 || !partner.has(customerWithDish.dish)
+            }
+            .sortedBy { estimateComplexityToPrepare(it.missingItemsInDish) }
+            .also { debug("Customer with all dishes", it) }
+            .firstOrNull()
+        if (customerWithDish == null) {
+            return Action.Wait("No customer with dish for $customer")
+        } else {
+            customerWithDish.missingItemsInDish
+                .filter { cookBook.isPrepared(it) }
+                .filter { !player.hasAccessTo(it) }
+                .sortedByDescending { estimateValue(it) }
+                .forEach { item ->
+                    return prepare(item)
+                }
+            return Action.Wait("Nothing to prepare")
+        }
+    }
 }
